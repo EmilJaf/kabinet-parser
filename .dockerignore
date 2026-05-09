@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+src/*.egg-info/
+.env
+.git/
+.idea/
+.pytest_cache/
+.DS_Store
+tests/
+docker-compose.yml
+Dockerfile
+.dockerignore

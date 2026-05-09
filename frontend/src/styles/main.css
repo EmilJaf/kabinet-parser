@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+/* iOS PWA safe-area handling — viewport-fit=cover lets us draw under the
+   status bar / home indicator / landscape notch, so we have to give back
+   the side space ourselves. (Top is handled per-component in the mobile
+   sticky bar; bottom is handled in PwaPrompt.) */
+/* html: only the bg (fills any zone the body doesn't cover, including iOS
+   Safari URL-bar zone). Don't put padding/max-width here — in PWA standalone
+   it conflicts with viewport-fit=cover. */
+html {
+  background-color: var(--color-bg);
+}
+
+body {
+  /* Side safe-area only on body — html with padding caused weird PWA layout. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* overflow-x: clip is more aggressive than hidden — blocks horizontal
+     scroll from fixed descendants like the off-canvas drawer too. */
+  overflow-x: clip;
+  max-width: 100vw;
+  background-color: var(--color-bg);
+  min-height: 100dvh;
+  /* Break long unbreakable strings (URLs, room codes, exam IDs) so they
+     don't push content past viewport edge on narrow phones. */
+  overflow-wrap: anywhere;
+}
+
+/* ─── Design tokens ─────────────────────────────────────────────────── */
+
+@theme {
+  /* Neutral monochrome — Geist sans + mono. No serifs, nos. */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "Geist Mono", "SF Mono", Menlo, monospace;
+
+  /* Cool monochrome scale — pure white surfaces, blacks for type. */
+  --color-bg: #ffffff;
+  --color-bg-soft: #fafafa;
+  --color-bg-deep: #f5f5f5;
+  --color-border: #e5e5e5;
+  --color-border-soft: #ededed;
+
+  --color-ink: #0a0a0a;
+  --color-ink-soft: #404040;
+  --color-muted: #737373;
+  --color-muted-soft: #a3a3a3;
+
+
+  /* Mark semantics — desaturated, ink-adjacent, not bright. */
+  --color-mark-positive: #166534;
+  --color-mark-negative: #991b1b;
+  --color-mark-warning: #b45309;
+
+  /* Dark-mode counterparts. Tailwind 4 doesn't switch @theme values at
+     runtime, but Tailwind utilities like `bg-bg` resolve to var(--color-bg)
+     which we override via [data-theme="dark"] below. */
+
+  /* Type scale — software-tool sizes, calmer than editorial. */
+  --text-display-xl: 2.5rem;
+  --text-display-xl--line-height: 1.1;
+  --text-display-xl--letter-spacing: -0.025em;
+
+  --text-display-lg: 2rem;
+  --text-display-lg--line-height: 1.15;
+  --text-display-lg--letter-spacing: -0.02em;
+
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.015em;
+
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.55;
+
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1.4;
+  --text-micro--letter-spacing: 0.02em;
+}
+
+/* ─── Dark theme overrides ─────────────────────────────────────────────
+ * Activated by `<html data-theme="dark">` (set by useTheme composable
+ * + an inline script in index.html to avoid FOUC on first paint).
+ * Same values apply when the user picks 'system' and the OS reports
+ * dark — handled inside the composable.
+ */
+[data-theme="dark"] {
+  --color-bg: #0a0a0a;
+  --color-bg-soft: #141414;
+  --color-bg-deep: #1f1f1f;
+  --color-border: #262626;
+  --color-border-soft: #1f1f1f;
+
+  --color-ink: #fafafa;
+  --color-ink-soft: #d4d4d4;
+  --color-muted: #a3a3a3;
+  --color-muted-soft: #525252;
+
+  /* Mark colors lifted up the saturation/lightness scale so they read
+     against the dark surface — same visual weight as light-mode greens. */
+  --color-mark-positive: #4ade80;
+  --color-mark-negative: #f87171;
+  --color-mark-warning: #fbbf24;
+}
+
+/* Help the browser pick correct system controls + scrollbars + form
+   input chrome for the active theme. */
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────── */
+
+html, body, #app {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-feature-settings: "ss01", "ss02", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-ink);
+  color: var(--color-bg);
+}
+
+/* Calm focus ring — single hairline, no glow. */
+*:focus-visible {
+  outline: 1.5px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Custom scrollbars — thin, neutral. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--color-muted-soft); }
+
+/* ─── Utility components ─────────────────────────────────────────────── */
+
+@utility hairline {
+  border-color: var(--color-border);
+  border-width: 1px;
+}
+
+@utility hairline-b {
+  border-bottom: 1px solid var(--color-border);
+}
+
+@utility hairline-t {
+  border-top: 1px solid var(--color-border);
+}
+
+@utility hairline-r {
+  border-right: 1px solid var(--color-border);
+}
+
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}

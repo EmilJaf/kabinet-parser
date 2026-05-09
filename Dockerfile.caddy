@@ -1,0 +1,14 @@
+# Caddy image bundled with the prebuilt SPA. Doing the build inside the
+# same Dockerfile keeps prod deploy a one-liner: `docker compose ... build`.
+FROM node:20-alpine AS spa
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
+COPY frontend/ .
+ARG VITE_API_BASE_URL=""
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+RUN npm run build
+
+FROM caddy:2-alpine
+COPY --from=spa /app/dist /srv
+COPY Caddyfile /etc/caddy/Caddyfile

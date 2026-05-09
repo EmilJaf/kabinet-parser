@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-unec}
+      POSTGRES_USER: ${POSTGRES_USER:-unec}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-unec}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Host port 5433 to avoid clashing with a local postgres on 5432.
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-unec} -d ${POSTGRES_DB:-unec}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Host port 6380 to avoid clashing with a local redis on 6379.
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    command: uvicorn unec.api.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-unec}:${POSTGRES_PASSWORD:-unec}@postgres:5432/${POSTGRES_DB:-unec}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-}
+      FERNET_KEY: ${FERNET_KEY:-}
+      # Local time everywhere — logs read naturally and cron jobs match the
+      # user's wall clock. DB timestamps are still stored UTC (DateTime tz=True).
+      TZ: Asia/Baku
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      # Persisted logs — survives container recreation. Read by the admin
+      # panel via /v1/admin/logs. Both api+worker write here so admin
+      # (running inside api) can serve worker.log too.
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      # Generous start_period so first-deploy migrations (when
+      # RUN_MIGRATIONS_ON_START=true in prod) don't get killed.
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: arq unec.workers.arq_app.WorkerSettings
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-unec}:${POSTGRES_PASSWORD:-unec}@postgres:5432/${POSTGRES_DB:-unec}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-}
+      FERNET_KEY: ${FERNET_KEY:-}
+      # ARQ cron uses local time — set Baku so the cron entries
+      # (hour=13/19, etc.) match the user's wall clock.
+      TZ: Asia/Baku
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

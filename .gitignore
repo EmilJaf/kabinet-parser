@@ -1,0 +1,30 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+src/*.egg-info/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.idea/
+.vscode/
+.DS_Store
+
+# Production secrets — never commit. Mounted at /run/secrets in the prod stack.
+secrets/*
+!secrets/.gitignore
+!secrets/README.md
+
+# Frontend build output
+frontend/dist/
+frontend/node_modules/
+frontend/.vite/
+
+# Caddy local TLS state (if anyone runs caddy locally)
+caddy_data/
+caddy_config/
+
+# Application logs — written by api + worker via core/logging_config.py
+# and tailed by /v1/admin/logs. Never committed.
+/logs/

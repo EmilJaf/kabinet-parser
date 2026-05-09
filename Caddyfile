@@ -1,0 +1,53 @@
+# Caddy reverse proxy for the kabinet stack.
+#
+# Usage:
+#   APP_DOMAIN=kabinet.example.com docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Caddy will provision a Let's Encrypt cert for $APP_DOMAIN automatically.
+# For local TLS testing replace the site address with `localhost` or `:443`.
+{
+	# Email for Let's Encrypt expiry notices. Override via env if you want.
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$APP_DOMAIN} {
+	encode gzip zstd
+
+	# Sensible defaults for an HttpOnly-cookie SPA. HSTS is on; the cookies
+	# are already Secure+HttpOnly+SameSite=Lax via the API.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		# CSP: SPA is self-hosted; only fonts come from Google. Tighten as needed.
+		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
+	# API + auto-generated docs proxy through to the FastAPI service. No
+	# `handle_path` here — we keep the /v1 prefix because the app expects it.
+	@api path /v1/* /docs /docs/* /openapi.json /redoc /redoc/* /health
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	# Service worker must be served with no-cache so browsers always check
+	# for a new version. Without this you can ship an SW update and clients
+	# stay stuck on the old one for the lifetime of the HTTP cache.
+	@sw path /sw.js
+	handle @sw {
+		header {
+			Cache-Control "no-cache, no-store, must-revalidate"
+			Service-Worker-Allowed "/"
+		}
+		root * /srv
+		file_server
+	}
+
+	# SPA — static files with HTML5 history-mode fallback.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

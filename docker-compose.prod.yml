@@ -1,0 +1,132 @@
+# Production overlay. Combine with the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Secrets layout (files in ./secrets/, NOT committed to git):
+#   secrets/secret_key          — JWT signing secret
+#   secrets/fernet_keys         — KEK material; csv, primary key first
+#   secrets/postgres_password   — DB password (also read by postgres container)
+#   secrets/database_url        — full asyncpg URL for the API/worker
+#
+# Required env (.env in the same directory, non-secret values only):
+#   APP_DOMAIN=kabinet.example.com
+#   ACME_EMAIL=you@example.com
+#   POSTGRES_DB=unec
+#   POSTGRES_USER=unec
+#   CORS_ORIGINS=https://kabinet.example.com
+#
+# What this changes vs. dev:
+#   - Caddy reverse proxy in front, auto-TLS via Let's Encrypt
+#   - Postgres + Redis no longer expose host ports
+#   - API runs without --reload and without source mounts
+#   - Secrets read from /run/secrets/* rather than env vars
+#   - Auth cookies flip to Secure (cookie_secure=true)
+
+secrets:
+  secret_key:
+    file: ./secrets/secret_key
+  fernet_keys:
+    file: ./secrets/fernet_keys
+  postgres_password:
+    file: ./secrets/postgres_password
+  database_url:
+    file: ./secrets/database_url
+  vapid_private_key:
+    file: ./secrets/vapid_private_key
+
+services:
+  postgres:
+    # Bind only to 127.0.0.1 — postgres is reachable from the server's
+    # localhost (so an SSH tunnel can hit it for backups / TablePlus
+    # debugging) but NOT from the public internet.
+    ports: !override
+      - "127.0.0.1:5432:5432"
+    # !override replaces the env block from the base file entirely (default
+    # is merge), so POSTGRES_PASSWORD from base doesn't conflict with
+    # POSTGRES_PASSWORD_FILE here.
+    environment: !override
+      POSTGRES_DB: ${POSTGRES_DB:-unec}
+      POSTGRES_USER: ${POSTGRES_USER:-unec}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+
+  redis:
+    ports: !reset []
+
+  api:
+    command: uvicorn unec.api.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*
+    # !override drops the dev source mounts but keeps the persistent log
+    # volume so admin /v1/admin/logs has something to read across rebuilds.
+    volumes: !override
+      - ./logs:/app/logs
+    ports: !reset []
+    # !override drops the env-var copies of SECRET_KEY/FERNET_KEY/DATABASE_URL
+    # from the base file — pydantic-settings will pick them up from
+    # /run/secrets/<field_name> instead.
+    environment: !override
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      COOKIE_SECURE: "true"
+      COOKIE_SAMESITE: lax
+      TZ: Asia/Baku
+      # Public VAPID key — non-secret, sent to browser on /push/vapid-key.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+      # Apply alembic migrations on container start. Safe under concurrent
+      # replicas (alembic uses a PG advisory lock).
+      RUN_MIGRATIONS_ON_START: "true"
+    secrets:
+      - secret_key
+      - fernet_keys
+      - database_url
+      - vapid_private_key
+    restart: unless-stopped
+
+  worker:
+    volumes: !override
+      - ./logs:/app/logs
+    environment: !override
+      REDIS_URL: redis://redis:6379/0
+      TZ: Asia/Baku
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+    secrets:
+      - secret_key
+      - fernet_keys
+      - database_url
+      - vapid_private_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+      args:
+        # Same-origin: SPA and API share APP_DOMAIN, so no cross-site cookies.
+        VITE_API_BASE_URL: ""
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
