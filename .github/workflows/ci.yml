@@ -149,8 +149,11 @@ jobs:
           ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<'EOF'
             set -euo pipefail
             cd ~/kabinet-parser
-            echo "→ git pull"
-            git pull --ff-only
+            echo "→ fetch + hard reset to origin/main"
+            # reset --hard instead of pull --ff-only so force-pushes
+            # (e.g. history rewrites) don't break the deployment.
+            git fetch origin main
+            git reset --hard origin/main
             echo "→ docker compose build (cache reuse for unchanged layers)"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml build
             echo "→ docker compose up -d"
