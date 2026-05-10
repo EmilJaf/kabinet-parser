@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
@@ -12,7 +13,13 @@ from ..core.security import (
     unwrap_dek,
     wrap_dek,
 )
-from ..db.models import UnecCredentials, User
+from ..db.models import (
+    ExamSyncState,
+    GradesSyncState,
+    ScheduleSyncState,
+    UnecCredentials,
+    User,
+)
 from ..scraper.client import AuthError as UnecAuthError
 from ..scraper.client import UnecClient
 
@@ -93,9 +100,19 @@ async def get_decrypted_password(session: AsyncSession, user_id: uuid.UUID) -> t
 
 
 async def delete_credentials(session: AsyncSession, user_id: uuid.UUID) -> bool:
+    """Unlink UNEC creds AND wipe the per-user sync_state rows.
+
+    Wiping sync_state means a re-link triggers the InitialSyncBanner
+    again (the SPA detects status==None on every section). Stored
+    Lessons/Subjects/Marks/Exams are left in place — they'll get
+    refreshed by the next sync, no point destroying user data on a
+    casual unlink.
+    """
     creds = await get_credentials(session, user_id)
     if creds is None:
         return False
     await session.delete(creds)
+    for model in (ScheduleSyncState, GradesSyncState, ExamSyncState):
+        await session.execute(delete(model).where(model.user_id == user_id))
     await session.commit()
     return True
