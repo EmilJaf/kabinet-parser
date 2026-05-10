@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -212,6 +213,16 @@ async def _replace_marks_for_lesson_type(
     lesson_type_name: str | None,
     popup: ParsedGradesPopup,
 ) -> int:
+    """Reconcile DB marks with the freshly-parsed popup.
+
+    Diff-based — preserves the row (and its created_at) for any mark
+    whose identity tuple (date, topic, mark_code) is unchanged. UNEC
+    can legitimately have multiple rows with the same tuple in one day
+    (e.g. two attendance flags), so we use multiset counts.
+
+    Naïve delete-then-insert would refresh created_at on every sync,
+    which breaks the new-mark push logic in workers/jobs/grades.py.
+    """
     # Safety: don't wipe existing marks if the new pull is empty AND we had data
     # before. UNEC sometimes returns an empty popup on transient errors.
     if not popup.marks:
@@ -230,23 +241,60 @@ async def _replace_marks_for_lesson_type(
             return 0
         return 0
 
-    await db_session.execute(
-        delete(Mark).where(
-            Mark.subject_id == subject.id, Mark.lesson_type_id == lesson_type_id
-        )
-    )
-    for parsed_mark in popup.marks:
-        db_session.add(
-            Mark(
-                subject_id=subject.id,
-                lesson_type_id=lesson_type_id,
-                lesson_type_name=lesson_type_name,
-                date=parsed_mark.date,
-                topic=parsed_mark.topic,
-                mark_code=parsed_mark.mark_code,
+    existing = list(
+        (
+            await db_session.execute(
+                select(Mark).where(
+                    Mark.subject_id == subject.id,
+                    Mark.lesson_type_id == lesson_type_id,
+                )
             )
-        )
-    return len(popup.marks)
+        ).scalars()
+    )
+
+    def _key(date_, topic, mark_code):
+        return (date_, topic or "", mark_code)
+
+    incoming_keys = Counter(
+        _key(m.date, m.topic, m.mark_code) for m in popup.marks
+    )
+
+    existing_by_key: dict[tuple, list[Mark]] = defaultdict(list)
+    for m in existing:
+        existing_by_key[_key(m.date, m.topic, m.mark_code)].append(m)
+
+    inserted = 0
+    # For every distinct mark identity, make sure DB has the right number
+    # of rows. Add new ones for the surplus, delete extras.
+    all_keys = set(incoming_keys) | set(existing_by_key)
+    for k in all_keys:
+        wanted = incoming_keys.get(k, 0)
+        have = existing_by_key.get(k, [])
+
+        while len(have) < wanted:
+            db_session.add(
+                Mark(
+                    subject_id=subject.id,
+                    lesson_type_id=lesson_type_id,
+                    lesson_type_name=lesson_type_name,
+                    date=k[0],
+                    topic=k[1],
+                    mark_code=k[2],
+                )
+            )
+            inserted += 1
+            have.append(None)  # placeholder to terminate loop
+
+        for extra in have[wanted:]:
+            if extra is not None:
+                await db_session.delete(extra)
+
+    # Refresh display-only field on rows we kept (cheap, no created_at change).
+    for m in existing:
+        if m.lesson_type_name != lesson_type_name:
+            m.lesson_type_name = lesson_type_name
+
+    return inserted
 
 
 async def _upsert_grading_details(
