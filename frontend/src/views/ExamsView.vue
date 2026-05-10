@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import type { ExamOut, ExamQuestionsOut, ExamsOut } from '@/api/types'
@@ -108,18 +108,45 @@ function buildParams(): Record<string, string | number> {
   return p
 }
 
+let pollTimer: ReturnType<typeof setInterval> | null = null
+function pending(): boolean {
+  return data.value !== null && !data.value.last_synced_at
+}
+function stopPolling() {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+onUnmounted(stopPolling)
+
+async function fetchOnce() {
+  data.value = await api<ExamsOut>('/v1/exams', { query: buildParams() })
+  if (data.value) {
+    if (selectedYearId.value == null && data.value.edu_year_id != null) {
+      selectedYearId.value = data.value.edu_year_id
+    }
+    if (selectedSemesterId.value == null && data.value.edu_semester_id != null) {
+      selectedSemesterId.value = data.value.edu_semester_id
+    }
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = null
+  stopPolling()
   try {
-    data.value = await api<ExamsOut>('/v1/exams', { query: buildParams() })
-    if (data.value) {
-      if (selectedYearId.value == null && data.value.edu_year_id != null) {
-        selectedYearId.value = data.value.edu_year_id
-      }
-      if (selectedSemesterId.value == null && data.value.edu_semester_id != null) {
-        selectedSemesterId.value = data.value.edu_semester_id
-      }
+    await fetchOnce()
+    if (pending()) {
+      pollTimer = setInterval(async () => {
+        try { await fetchOnce() } catch { /* keep polling */ }
+        if (!pending()) {
+          stopPolling()
+          loading.value = false
+        }
+      }, 4000)
+      return
     }
   } catch (e: unknown) {
     const err = e as { data?: { detail?: string }; status?: number }

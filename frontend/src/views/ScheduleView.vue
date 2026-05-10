@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import type { LessonOut, ScheduleOut } from '@/api/types'
@@ -90,20 +90,47 @@ const lastSyncedRel = computed(() => {
 onMounted(async () => {
   await load()
 })
+onUnmounted(() => stopPolling())
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function pending(): boolean {
+  return data.value !== null && !data.value.last_synced_at
+}
+
+function stopPolling() {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+async function fetchOnce() {
+  try {
+    data.value = await api<ScheduleOut>('/v1/schedule')
+    error.value = null
+  } catch (e: unknown) {
+    const err = e as { data?: { detail?: string }; status?: number }
+    if (err?.status === 409) error.value = 'unec_creds_missing'
+    else error.value = err?.data?.detail ?? 'Не удалось загрузить расписание.'
+  }
+}
 
 async function load() {
   loading.value = true
   error.value = null
-  try {
-    data.value = await api<ScheduleOut>('/v1/schedule')
-  } catch (e: unknown) {
-    const err = e as { data?: { detail?: string }; status?: number }
-    if (err?.status === 409) {
-      error.value = 'unec_creds_missing'
-    } else {
-      error.value = err?.data?.detail ?? 'Не удалось загрузить расписание.'
+  await fetchOnce()
+  if (pending()) {
+    if (pollTimer === null) {
+      pollTimer = setInterval(async () => {
+        await fetchOnce()
+        if (!pending()) {
+          stopPolling()
+          loading.value = false
+        }
+      }, 4000)
     }
-  } finally {
+  } else {
     loading.value = false
   }
 }

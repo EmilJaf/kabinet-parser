@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import type {
@@ -273,12 +273,27 @@ const lastSync = computed(() => {
 })
 
 onMounted(load)
+onUnmounted(() => stopPolling())
 
-async function load() {
-  loading.value = true
-  error.value = null
-  credsMissing.value = false
-  // Fire both in parallel; tolerate either failing.
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function pending(): boolean {
+  // Initial sync hasn't finished yet — keep showing the loader skeleton
+  // and re-poll until the worker writes data into the DB.
+  return (
+    (schedule.value !== null && !schedule.value.last_synced_at) ||
+    (grades.value !== null && !grades.value.last_synced_at)
+  )
+}
+
+function stopPolling() {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+async function fetchOnce() {
   const results = await Promise.allSettled([
     api<ScheduleOut>('/v1/schedule'),
     api<GradesOut>('/v1/grades'),
@@ -286,16 +301,32 @@ async function load() {
   for (const r of results) {
     if (r.status === 'rejected') {
       const err = r.reason as { status?: number; data?: { detail?: string } }
-      if (err?.status === 409) {
-        credsMissing.value = true
-      } else if (!error.value) {
-        error.value = err?.data?.detail ?? null
-      }
+      if (err?.status === 409) credsMissing.value = true
+      else if (!error.value) error.value = err?.data?.detail ?? null
     }
   }
   if (results[0].status === 'fulfilled') schedule.value = results[0].value
   if (results[1].status === 'fulfilled') grades.value = results[1].value
-  loading.value = false
+}
+
+async function load() {
+  loading.value = true
+  error.value = null
+  credsMissing.value = false
+  await fetchOnce()
+  if (pending()) {
+    if (pollTimer === null) {
+      pollTimer = setInterval(async () => {
+        await fetchOnce()
+        if (!pending()) {
+          stopPolling()
+          loading.value = false
+        }
+      }, 4000)
+    }
+  } else {
+    loading.value = false
+  }
 }
 
 function lessonTimeBlock(lesson: LessonOut): string {
