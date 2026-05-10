@@ -23,6 +23,7 @@ from .v1 import grades as grades_router
 from .v1 import push as push_router
 from .v1 import schedule as schedule_router
 from .v1 import session as session_router
+from .v1 import sync as sync_router
 
 
 @asynccontextmanager
@@ -60,6 +61,7 @@ app.include_router(grades_router.router, prefix="/v1")
 app.include_router(exams_router.router, prefix="/v1")
 app.include_router(files_router.router, prefix="/v1")
 app.include_router(push_router.router, prefix="/v1")
+app.include_router(sync_router.router, prefix="/v1")
 app.include_router(admin_router.router, prefix="/v1")
 
 

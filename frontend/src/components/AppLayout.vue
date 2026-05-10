@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import InitialSyncBanner from './InitialSyncBanner.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -158,6 +159,10 @@ watch(() => route.fullPath, () => (drawerOpen.value = false))
         </button>
         <span class="text-[1.05rem] font-semibold tracking-tight">Kabinet</span>
       </div>
+
+      <!-- Shows after the user wires up UNEC creds, hides itself once
+           all three sections (schedule/grades/exams) have synced once. -->
+      <InitialSyncBanner />
 
       <RouterView v-slot="{ Component }">
         <Transition name="fade" mode="out-in">

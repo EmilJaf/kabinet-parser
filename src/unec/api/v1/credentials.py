@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.arq import enqueue_initial_sync_for
 from ...core.rate_limit import limiter
 from ...db.models import User
 from ...services import unec_credentials as creds_service
@@ -35,6 +36,11 @@ async def upsert(
             status.HTTP_400_BAD_REQUEST,
             detail="UNEC отклонил логин. Проверь имя/пароль.",
         ) from exc
+
+    # Kick off the first sync immediately so the dashboard isn't empty
+    # when the user navigates away from settings. Worker processes in the
+    # background; the SPA polls /v1/sync/status for progress.
+    await enqueue_initial_sync_for(user.id)
 
     return UnecCredentialsStatus(
         configured=True,

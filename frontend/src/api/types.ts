@@ -34,6 +34,20 @@ export interface AdminLogsOut {
   lines: string[]
 }
 
+export interface SyncSectionStatus {
+  last_synced_at: string | null
+  status: 'ok' | 'error' | null
+  error: string | null
+}
+
+export interface SyncStatusOut {
+  schedule: SyncSectionStatus
+  grades: SyncSectionStatus
+  exams: SyncSectionStatus
+  all_synced: boolean
+  any_pending: boolean
+}
+
 export interface FilesOption {
   value: string
   label: string
