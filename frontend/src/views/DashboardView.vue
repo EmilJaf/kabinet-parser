@@ -116,7 +116,9 @@ const headerDate = computed(
 
 const todayLessons = computed(() => {
   if (!schedule.value) return []
-  // Deduplicate (same time slot can have alternating-week siblings).
+  // On weekends and AZ public holidays, the recurring weekday slots in the
+  // DB are not real classes — hide them so the holiday/weekend branch wins.
+  if (calendar.value && !calendar.value.is_workday) return []
   return [...schedule.value.lessons]
     .filter((l) => l.day === todayDow)
     .sort((a, b) => a.start.localeCompare(b.start))
