@@ -22,6 +22,7 @@ import {
 } from '@/lib/time'
 import { lessonTypeRu } from '@/lib/locale'
 import { useNow } from '@/composables/useNow'
+import { PhConfetti, PhMoon } from '@phosphor-icons/vue'
 
 const schedule = ref<ScheduleOut | null>(null)
 const grades = ref<GradesOut | null>(null)
@@ -431,42 +432,24 @@ function lessonTimeBlock(lesson: LessonOut): string {
               v-if="calendar?.is_holiday"
               class="flex items-start gap-3 text-[1.5rem] text-ink leading-tight"
             >
-              <svg
+              <PhConfetti
                 class="shrink-0 mt-1 text-mark-positive"
-                width="22"
-                height="22"
-                viewBox="0 0 22 22"
-                fill="none"
+                :size="26"
+                weight="duotone"
                 aria-hidden="true"
-              >
-                <path
-                  d="M11 2v4M11 16v4M2 11h4M16 11h4M4.6 4.6l2.8 2.8M14.6 14.6l2.8 2.8M17.4 4.6l-2.8 2.8M7.4 14.6l-2.8 2.8"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                />
-              </svg>
+              />
               <span>Праздник: {{ calendar.holiday_name }}</span>
             </div>
             <div
               v-else-if="calendar?.is_weekend"
               class="flex items-start gap-3 text-[1.5rem] text-ink-soft leading-tight"
             >
-              <svg
+              <PhMoon
                 class="shrink-0 mt-1"
-                width="22"
-                height="22"
-                viewBox="0 0 22 22"
-                fill="none"
+                :size="24"
+                weight="regular"
                 aria-hidden="true"
-              >
-                <path
-                  d="M18 13.5A7 7 0 0 1 8.5 4a7 7 0 1 0 9.5 9.5z"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linejoin="round"
-                />
-              </svg>
+              />
               <span>Сегодня выходной</span>
             </div>
             <p v-else class="text-[1.5rem] text-ink-soft leading-tight">
