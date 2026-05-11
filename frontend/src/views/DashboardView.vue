@@ -22,7 +22,7 @@ import {
 } from '@/lib/time'
 import { lessonTypeRu } from '@/lib/locale'
 import { useNow } from '@/composables/useNow'
-import { PhConfetti, PhMoon } from '@phosphor-icons/vue'
+import { PhCalendarCheck, PhConfetti, PhMoon } from '@phosphor-icons/vue'
 
 const schedule = ref<ScheduleOut | null>(null)
 const grades = ref<GradesOut | null>(null)
@@ -115,14 +115,25 @@ const headerDate = computed(
   () => `${dayName(now.value.getDay())}, ${formatDate(now.value)}`,
 )
 
+/** Today's scheduled lessons, ignoring recurring slots that fall on a
+ *  non-workday and dropping any whose end time has already passed.
+ *  Going empty triggers the "next lesson" / "all done" branch. */
 const todayLessons = computed(() => {
   if (!schedule.value) return []
-  // On weekends and AZ public holidays, the recurring weekday slots in the
-  // DB are not real classes — hide them so the holiday/weekend branch wins.
   if (calendar.value && !calendar.value.is_workday) return []
+  const nowMs = now.value.getTime()
   return [...schedule.value.lessons]
-    .filter((l) => l.day === todayDow)
+    .filter((l) => l.day === todayDow && todayAt(l.end).getTime() > nowMs)
     .sort((a, b) => a.start.localeCompare(b.start))
+})
+
+/** True when today is a workday and there *were* lessons but they're
+ *  all in the past — distinguishes "На сегодня всё" from "Сегодня свободно". */
+const lessonsAllDone = computed(() => {
+  if (!schedule.value) return false
+  if (calendar.value && !calendar.value.is_workday) return false
+  const dayHasLessons = schedule.value.lessons.some((l) => l.day === todayDow)
+  return dayHasLessons && todayLessons.value.length === 0
 })
 
 interface RecentMark {
@@ -451,6 +462,18 @@ function lessonTimeBlock(lesson: LessonOut): string {
                 aria-hidden="true"
               />
               <span>Сегодня выходной</span>
+            </div>
+            <div
+              v-else-if="lessonsAllDone"
+              class="flex items-start gap-3 text-[1.5rem] text-ink leading-tight"
+            >
+              <PhCalendarCheck
+                class="shrink-0 mt-1 text-mark-positive"
+                :size="24"
+                weight="regular"
+                aria-hidden="true"
+              />
+              <span>На сегодня всё</span>
             </div>
             <p v-else class="text-[1.5rem] text-ink-soft leading-tight">
               Сегодня свободно.
