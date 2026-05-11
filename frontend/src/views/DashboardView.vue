@@ -427,24 +427,54 @@ function lessonTimeBlock(lesson: LessonOut): string {
         <!-- No classes today: explain why (holiday / weekend) and show next class -->
         <div v-else>
           <div class="mb-6">
-            <p
+            <div
               v-if="calendar?.is_holiday"
-              class="text-[1.5rem] text-ink leading-tight"
+              class="flex items-start gap-3 text-[1.5rem] text-ink leading-tight"
             >
-              🎉 Праздник: {{ calendar.holiday_name }}
-            </p>
-            <p
+              <svg
+                class="shrink-0 mt-1 text-mark-positive"
+                width="22"
+                height="22"
+                viewBox="0 0 22 22"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M11 2v4M11 16v4M2 11h4M16 11h4M4.6 4.6l2.8 2.8M14.6 14.6l2.8 2.8M17.4 4.6l-2.8 2.8M7.4 14.6l-2.8 2.8"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <span>Праздник: {{ calendar.holiday_name }}</span>
+            </div>
+            <div
               v-else-if="calendar?.is_weekend"
-              class="text-[1.5rem] text-ink-soft leading-tight"
+              class="flex items-start gap-3 text-[1.5rem] text-ink-soft leading-tight"
             >
-              Сегодня выходной.
-            </p>
+              <svg
+                class="shrink-0 mt-1"
+                width="22"
+                height="22"
+                viewBox="0 0 22 22"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M18 13.5A7 7 0 0 1 8.5 4a7 7 0 1 0 9.5 9.5z"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span>Сегодня выходной</span>
+            </div>
             <p v-else class="text-[1.5rem] text-ink-soft leading-tight">
               Сегодня свободно.
             </p>
             <p
               v-if="calendar && !calendar.is_workday"
-              class="text-[0.85rem] text-muted mt-1.5"
+              class="text-[0.85rem] text-muted mt-2 pl-[34px]"
             >
               Следующий рабочий день — {{ formatDate(parseISODate(calendar.next_workday)) }}.
             </p>
