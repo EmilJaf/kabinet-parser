@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.base import get_session_factory
 from ...db.models import Lesson, PushSubscription
+from ...services import calendar as cal_service
 from ...services import push as push_service
 from ...services.lesson_brief import build_lesson_brief
 
@@ -117,7 +118,20 @@ async def send_morning_brief(ctx: dict, user_id: str) -> dict:
 
 
 async def enqueue_morning_briefs(ctx: dict) -> dict:
-    """Cron at 07:30 Baku — fan out the morning brief to every push-enabled user."""
+    """Cron at 07:30 Baku — fan out the morning brief to every push-enabled user.
+
+    Skipped on weekends and Azerbaijani public holidays — no point reminding
+    about classes that don't happen.
+    """
+    today_local = datetime.now().date()
+    if not cal_service.is_workday(today_local):
+        return {
+            "skipped": True,
+            "reason": "non_workday",
+            "holiday": cal_service.holiday_name_for(today_local),
+            "ts": datetime.now(UTC).isoformat(),
+        }
+
     factory = get_session_factory()
     enqueued = 0
 
@@ -132,7 +146,20 @@ async def enqueue_morning_briefs(ctx: dict) -> dict:
     return {"enqueued": enqueued, "ts": datetime.now(UTC).isoformat()}
 
 
-async def enqueue_today_reminders(ctx: dict) -> dict:
+async def enqueue_today_reminders(ctx: dict) -> dict:  # noqa: C901
+    # Per-lesson reminders make no sense on weekends or holidays.
+    today_local = datetime.now().date()
+    if not cal_service.is_workday(today_local):
+        return {
+            "skipped": True,
+            "reason": "non_workday",
+            "holiday": cal_service.holiday_name_for(today_local),
+            "ts": datetime.now(UTC).isoformat(),
+        }
+    return await _enqueue_today_reminders_impl(ctx)
+
+
+async def _enqueue_today_reminders_impl(ctx: dict) -> dict:
     """Cron: schedule today's lesson reminders for everyone with push subs.
 
     Runs once a day. ARQ deferred jobs persist in Redis, so a worker restart

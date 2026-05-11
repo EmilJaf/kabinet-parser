@@ -16,6 +16,7 @@ from ..core.rate_limit import limiter, too_many_requests_handler
 from ..db.base import get_engine
 from .v1 import admin as admin_router
 from .v1 import auth as auth_router
+from .v1 import calendar as calendar_router
 from .v1 import credentials as credentials_router
 from .v1 import exams as exams_router
 from .v1 import files as files_router
@@ -62,6 +63,7 @@ app.include_router(exams_router.router, prefix="/v1")
 app.include_router(files_router.router, prefix="/v1")
 app.include_router(push_router.router, prefix="/v1")
 app.include_router(sync_router.router, prefix="/v1")
+app.include_router(calendar_router.router, prefix="/v1")
 app.include_router(admin_router.router, prefix="/v1")
 
 

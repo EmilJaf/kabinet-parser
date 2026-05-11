@@ -48,6 +48,15 @@ export interface SyncStatusOut {
   any_pending: boolean
 }
 
+export interface CalendarTodayOut {
+  date: string
+  is_workday: boolean
+  is_weekend: boolean
+  is_holiday: boolean
+  holiday_name: string | null
+  next_workday: string
+}
+
 export interface FilesOption {
   value: string
   label: string

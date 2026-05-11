@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import type {
+  CalendarTodayOut,
   GradesOut,
   LessonOut,
   MarkOut,
@@ -24,6 +25,7 @@ import { useNow } from '@/composables/useNow'
 
 const schedule = ref<ScheduleOut | null>(null)
 const grades = ref<GradesOut | null>(null)
+const calendar = ref<CalendarTodayOut | null>(null)
 const loading = ref(true)
 const credsMissing = ref(false)
 const error = ref<string | null>(null)
@@ -297,6 +299,7 @@ async function fetchOnce() {
   const results = await Promise.allSettled([
     api<ScheduleOut>('/v1/schedule'),
     api<GradesOut>('/v1/grades'),
+    api<CalendarTodayOut>('/v1/calendar/today'),
   ])
   for (const r of results) {
     if (r.status === 'rejected') {
@@ -307,6 +310,7 @@ async function fetchOnce() {
   }
   if (results[0].status === 'fulfilled') schedule.value = results[0].value
   if (results[1].status === 'fulfilled') grades.value = results[1].value
+  if (results[2].status === 'fulfilled') calendar.value = results[2].value
 }
 
 async function load() {
@@ -418,12 +422,31 @@ function lessonTimeBlock(lesson: LessonOut): string {
           </li>
         </ul>
 
-        <!-- No classes today: show next class -->
+        <!-- No classes today: explain why (holiday / weekend) and show next class -->
         <div v-else>
-          <p class="text-[1.5rem] text-ink-soft leading-tight mb-6"
->
-            Сегодня свободно.
-          </p>
+          <div class="mb-6">
+            <p
+              v-if="calendar?.is_holiday"
+              class="text-[1.5rem] text-ink leading-tight"
+            >
+              🎉 Праздник: {{ calendar.holiday_name }}
+            </p>
+            <p
+              v-else-if="calendar?.is_weekend"
+              class="text-[1.5rem] text-ink-soft leading-tight"
+            >
+              Сегодня выходной.
+            </p>
+            <p v-else class="text-[1.5rem] text-ink-soft leading-tight">
+              Сегодня свободно.
+            </p>
+            <p
+              v-if="calendar && !calendar.is_workday"
+              class="text-[0.85rem] text-muted mt-1.5"
+            >
+              Следующий рабочий день — {{ formatDate(parseISODate(calendar.next_workday)) }}.
+            </p>
+          </div>
           <div v-if="upcomingLesson" class="grid grid-cols-[5.5rem_1fr] gap-6">
             <div class="font-mono text-[0.95rem] text-ink leading-tight pt-1">
               {{ shortTime(upcomingLesson.lesson.start) }}

@@ -28,6 +28,9 @@ dependencies = [
     "slowapi>=0.1.9",
     # Web Push (PWA notifications) — VAPID + payload encryption.
     "pywebpush>=2.0",
+    # Country-aware holiday calendar (Azerbaijan), with rules for moved
+    # weekends and movable Islamic dates.
+    "holidays>=0.55",
     # Settings + CLI
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
