@@ -33,6 +33,14 @@ class UserOut(BaseModel):
     email: EmailStr
     created_at: datetime
     is_admin: bool = False
+    language: str = "az"
+
+
+class UserPreferencesIn(BaseModel):
+    """Patch payload for user-editable profile fields. All optional — only
+    provided fields are applied."""
+
+    language: str | None = Field(default=None, pattern=r"^(az|ru|en)$")
 
 
 class UnecCredentialsIn(BaseModel):

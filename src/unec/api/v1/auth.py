@@ -12,7 +12,7 @@ from ...core.security import hash_password, verify_password
 from ...db.models import User
 from ...services import auth as auth_service
 from ..deps import get_current_user, get_db, get_redis
-from ..schemas import LoginIn, RegisterIn, UserOut
+from ..schemas import LoginIn, RegisterIn, UserOut, UserPreferencesIn
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -161,4 +161,21 @@ async def logout(
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> UserOut:
+    return UserOut.model_validate(user)
+
+
+@router.patch("/me", response_model=UserOut)
+@limiter.limit("20/minute")
+async def update_me(
+    request: Request,
+    payload: UserPreferencesIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> UserOut:
+    """Update the calling user's editable preferences (currently just
+    language). Only fields present in the payload are touched."""
+    if payload.language is not None:
+        user.language = payload.language
+    await session.commit()
+    await session.refresh(user)
     return UserOut.model_validate(user)

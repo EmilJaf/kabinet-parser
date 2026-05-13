@@ -37,6 +37,12 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(
         Boolean, server_default="false", nullable=False
     )
+    # UI + push notification language. ISO 639-1 codes — supported set is
+    # validated in the API layer (currently {az, ru, en}). Default 'az'
+    # matches the primary user base (UNEC students).
+    language: Mapped[str] = mapped_column(
+        String(2), server_default="az", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
