@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/api/client'
 import type { ExamQuestionDetailOut, ExamQuestionsOut } from '@/api/types'
 import Skeleton from './Skeleton.vue'
 import ExamQuestionDetail from './ExamQuestionDetail.vue'
+
+const { t } = useI18n()
+
+function statusTitle(status: 'correct' | 'wrong' | 'unknown'): string {
+  if (status === 'correct') return t('examQuestion.correctTooltip')
+  if (status === 'wrong') return t('examQuestion.wrongTooltip')
+  return t('examQuestion.blankTooltip')
+}
 
 interface QuestionsState {
   loading: boolean
@@ -53,7 +62,7 @@ async function toggleQuestion(qid: number) {
       )
     } catch (e: unknown) {
       const err = e as { data?: { detail?: string } }
-      detailCache[qid].error = err?.data?.detail ?? 'Не удалось загрузить детали.'
+      detailCache[qid].error = err?.data?.detail ?? t('examQuestion.loadDetailsFailed')
     } finally {
       detailCache[qid].loading = false
     }
@@ -80,14 +89,14 @@ function statusDot(status: 'correct' | 'wrong' | 'unknown'): string {
   </div>
 
   <div v-else-if="state.data && !state.data.available" class="text-muted text-[0.85rem] pt-2">
-    Детали по этому экзамену недоступны.
+    {{ t('examQuestion.noDetails') }}
     <span class="block text-micro text-muted-soft mt-1">
-      Возможно, бумажный экзамен или старая запись — попробуйте «Обновить».
+      {{ t('examQuestion.noDetailsHint') }}
     </span>
   </div>
 
   <div v-else-if="state.data && !state.data.questions.length" class="text-muted text-[0.85rem] pt-2">
-    Кабинет не отдал список вопросов.
+    {{ t('examQuestion.noQuestions') }}
   </div>
 
   <div v-else-if="state.data" class="pt-2">
@@ -96,14 +105,14 @@ function statusDot(status: 'correct' | 'wrong' | 'unknown'): string {
       <span class="flex items-baseline gap-1.5">
         <span class="w-1.5 h-1.5 rounded-full bg-mark-positive inline-block" />
         <span class="font-mono tabular-nums text-ink">{{ summary!.correct }}</span>
-        правильно
+        {{ t('examQuestion.right') }}
       </span>
       <span class="flex items-baseline gap-1.5">
         <span class="w-1.5 h-1.5 rounded-full bg-mark-negative inline-block" />
         <span class="font-mono tabular-nums text-ink">{{ summary!.wrong }}</span>
-        неправильно
+        {{ t('examQuestion.wrong') }}
       </span>
-      <span class="text-muted-soft">из <span class="font-mono">{{ summary!.total }}</span></span>
+      <span class="text-muted-soft">{{ t('examQuestion.outOf') }} <span class="font-mono">{{ summary!.total }}</span></span>
     </div>
 
     <!-- Questions list -->
@@ -125,7 +134,7 @@ function statusDot(status: 'correct' | 'wrong' | 'unknown'): string {
               <span
                 class="w-1.5 h-1.5 rounded-full mt-1 shrink-0"
                 :class="statusDot(q.status)"
-                :title="q.status === 'correct' ? 'Правильно' : q.status === 'wrong' ? 'Неправильно' : 'Без ответа'"
+                :title="statusTitle(q.status)"
               />
               <span class="text-ink-soft leading-snug min-w-0">{{ q.text }}</span>
             </div>
@@ -148,7 +157,7 @@ function statusDot(status: 'correct' | 'wrong' | 'unknown'): string {
             <span
               class="w-1.5 h-1.5 rounded-full mt-1"
               :class="statusDot(q.status)"
-              :title="q.status === 'correct' ? 'Правильно' : q.status === 'wrong' ? 'Неправильно' : 'Без ответа'"
+              :title="statusTitle(q.status)"
             />
             <span class="text-ink-soft leading-snug min-w-0">{{ q.text }}</span>
             <span

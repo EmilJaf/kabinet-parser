@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/api/client'
 import type { UnecCredentialsStatus } from '@/api/types'
 import { useSyncStatus } from '@/composables/useSyncStatus'
 import { ref } from 'vue'
 
+const { t } = useI18n()
 const sync = useSyncStatus()
 const credsConfigured = ref(false)
 const credsChecked = ref(false)
@@ -34,9 +36,9 @@ defineExpose({ recheck: async () => { await checkCreds(); if (credsConfigured.va
 const sections = computed(() => {
   const s = sync.status.value
   return [
-    { label: 'Расписание', key: 'schedule' as const, state: s?.schedule.status ?? null },
-    { label: 'Журнал',      key: 'grades' as const,   state: s?.grades.status ?? null },
-    { label: 'Экзамены',    key: 'exams' as const,    state: s?.exams.status ?? null },
+    { label: t('sync.schedule'), key: 'schedule' as const, state: s?.schedule.status ?? null },
+    { label: t('sync.grades'),   key: 'grades' as const,   state: s?.grades.status ?? null },
+    { label: t('sync.exams'),    key: 'exams' as const,    state: s?.exams.status ?? null },
   ]
 })
 
@@ -76,7 +78,7 @@ watch(visible, (now) => {
     >
       <span class="flex items-center gap-2 text-[0.9rem] text-ink">
         <span class="inline-block h-2 w-2 rounded-full bg-mark-warning animate-pulse" />
-        Загружаем данные из UNEC, обычно ~30 секунд…
+        {{ t('sync.loading') }}
       </span>
       <ul class="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro font-mono uppercase tracking-wider">
         <li

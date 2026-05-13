@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/api/client'
 import type { AdminLogsOut, AdminStatsOut, AdminUserOut } from '@/api/types'
 import PageHeader from '@/components/PageHeader.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { relativeTime } from '@/lib/time'
+
+const { t } = useI18n()
 
 const users = ref<AdminUserOut[]>([])
 const stats = ref<AdminStatsOut | null>(null)
@@ -35,9 +38,9 @@ async function triggerSync(userId: string, kind: 'schedule' | 'grades' | 'exams'
   message.value = null
   try {
     await api(`/v1/admin/users/${userId}/sync/${kind}`, { method: 'POST' })
-    message.value = { kind: 'ok', text: `Sync «${kind}» поставлен в очередь` }
+    message.value = { kind: 'ok', text: t('admin.syncQueued', { kind }) }
   } catch (e: unknown) {
-    message.value = { kind: 'error', text: (e as Error).message ?? 'Не удалось' }
+    message.value = { kind: 'error', text: (e as Error).message ?? t('common.genericFailed') }
   } finally {
     busy.value = { ...busy.value, [userId]: '' }
   }
@@ -51,10 +54,10 @@ async function testPush(userId: string) {
       `/v1/admin/users/${userId}/push/test`,
       { method: 'POST' },
     )
-    message.value = { kind: 'ok', text: `Доставлено: ${r.delivered}` }
+    message.value = { kind: 'ok', text: t('admin.delivered', { count: r.delivered }) }
   } catch (e: unknown) {
     const err = e as { data?: { detail?: string }; message?: string }
-    message.value = { kind: 'error', text: err.data?.detail ?? err.message ?? 'Не удалось' }
+    message.value = { kind: 'error', text: err.data?.detail ?? err.message ?? t('common.genericFailed') }
   } finally {
     busy.value = { ...busy.value, [userId]: '' }
   }
@@ -115,22 +118,20 @@ onUnmounted(() => {
 const statCards = computed(() => {
   if (!stats.value) return []
   return [
-    { label: 'Всего пользователей', value: stats.value.user_count },
-    { label: 'Админов', value: stats.value.admin_count },
-    { label: 'С UNEC-кредами', value: stats.value.unec_linked_count },
-    { label: 'С пушем', value: stats.value.push_enabled_count },
+    { label: t('admin.totalUsers'), value: stats.value.user_count },
+    { label: t('admin.admins'), value: stats.value.admin_count },
+    { label: t('admin.withUnec'), value: stats.value.unec_linked_count },
+    { label: t('admin.withPush'), value: stats.value.push_enabled_count },
   ]
 })
 </script>
 
 <template>
   <div>
-    <PageHeader eyebrow="Админка · 01" title="Пользователи и состояние">
+    <PageHeader :eyebrow="t('admin.eyebrow')" :title="t('admin.title')">
       <template #below>
         <p class="mt-4 max-w-xl text-ink-soft">
-          Только для админов. Список зарегистрированных пользователей,
-          состояние их синков, push-подписок. Кнопки ручного запуска синка
-          и тест-уведомления.
+          {{ t('admin.intro') }}
         </p>
       </template>
     </PageHeader>
@@ -139,7 +140,7 @@ const statCards = computed(() => {
       <!-- Stats -->
       <section class="hairline-t pt-8">
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Цифры</span>
+          <span class="eyebrow">{{ t('admin.stats') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
@@ -173,7 +174,7 @@ const statCards = computed(() => {
       <!-- User list -->
       <section class="hairline-t mt-12 pt-8">
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Пользователи</span>
+          <span class="eyebrow">{{ t('admin.users') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
@@ -206,12 +207,12 @@ const statCards = computed(() => {
                 <span v-if="u.unec_username">UNEC: {{ u.unec_username }}</span>
                 <span v-else>UNEC: —</span>
                 <span class="mx-2">·</span>
-                <span>зарег. {{ fmtDate(u.created_at) }}</span>
+                <span>{{ t('admin.registered', { date: fmtDate(u.created_at) }) }}</span>
               </div>
               <div class="mt-1 text-micro text-muted">
-                Расписание: {{ fmtDate(u.schedule_last_synced_at) }} ·
-                Журнал: {{ fmtDate(u.grades_last_synced_at) }} ·
-                Экзамены: {{ fmtDate(u.exams_last_synced_at) }}
+                {{ t('admin.scheduleColon', { date: fmtDate(u.schedule_last_synced_at) }) }} ·
+                {{ t('admin.gradesColon', { date: fmtDate(u.grades_last_synced_at) }) }} ·
+                {{ t('admin.examsColon', { date: fmtDate(u.exams_last_synced_at) }) }}
               </div>
             </div>
 
@@ -238,14 +239,14 @@ const statCards = computed(() => {
         </ul>
 
         <div v-else class="text-muted hairline-t pt-12">
-          Пользователей пока нет.
+          {{ t('admin.noUsers') }}
         </div>
       </section>
 
       <!-- Logs -->
       <section class="hairline-t mt-12 pt-8">
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Логи</span>
+          <span class="eyebrow">{{ t('admin.logs') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
@@ -292,12 +293,12 @@ const statCards = computed(() => {
             :disabled="logsLoading"
             @click="fetchLogs"
           >
-            {{ logsLoading ? '…' : 'обновить' }}
+            {{ logsLoading ? '…' : t('admin.logRefresh') }}
           </button>
 
           <label class="flex items-center gap-2 text-micro text-muted cursor-pointer">
             <input v-model="logsAuto" type="checkbox" class="cursor-pointer" />
-            авто (5 сек)
+            {{ t('admin.logAuto') }}
           </label>
         </div>
 
@@ -307,10 +308,10 @@ const statCards = computed(() => {
           class="bg-bg-soft hairline rounded-sm overflow-auto max-h-[60vh] text-[0.78rem] leading-relaxed font-mono"
         >
           <div v-if="!logsData.available" class="p-4 text-muted">
-            Файл лога ещё не создан — сервис {{ logService }} ничего не написал.
+            {{ t('admin.logEmpty', { service: logService }) }}
           </div>
           <div v-else-if="logsData.lines.length === 0" class="p-4 text-muted">
-            Пусто (под заданный фильтр ничего не нашлось).
+            {{ t('admin.logEmptyFiltered') }}
           </div>
           <pre v-else class="p-4 whitespace-pre-wrap break-words"><code><span
             v-for="(line, i) in logsData.lines"
@@ -320,11 +321,11 @@ const statCards = computed(() => {
           >{{ line }}</span></code></pre>
         </div>
         <div v-else-if="!logsLoading" class="text-muted text-[0.9rem]">
-          Нажми «обновить» чтобы загрузить.
+          {{ t('admin.logHint') }}
         </div>
 
         <p v-if="logsData?.available" class="text-micro text-muted mt-2 font-mono">
-          {{ logsData.lines.length }} строк · файл {{ Math.round(logsData.file_size_bytes / 1024) }} KB
+          {{ t('admin.logSummary', { lines: logsData.lines.length, kb: Math.round(logsData.file_size_bytes / 1024) }) }}
         </p>
       </section>
     </div>

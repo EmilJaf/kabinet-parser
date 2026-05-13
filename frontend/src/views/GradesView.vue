@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import type { GradesOut, LessonTypeMarksOut, ScheduleOut, SubjectOut } from '@/api/types'
@@ -8,8 +9,10 @@ import Skeleton from '@/components/Skeleton.vue'
 import MarkBadge from '@/components/MarkBadge.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { relativeTime, formatDate, parseISODate, todayIsoDow } from '@/lib/time'
-import { gradingFieldRu, lessonTypeRu, semesterLabelRu } from '@/lib/locale'
+import { gradingFieldRu, lessonTypeRu, pluralize, semesterLabelRu } from '@/lib/locale'
 import { EDU_YEAR_OPTIONS, type UnecOption } from '@/lib/unec'
+
+const { t } = useI18n()
 
 // A grading-detail dict is meaningful only if at least one *value* is non-empty
 // (excluding the student-name row that always appears in the writing tab).
@@ -233,12 +236,10 @@ async function load() {
     if (err?.status === 409) {
       error.value = 'unec_creds_missing'
     } else if (err?.data?.detail === 'historical_years_unavailable') {
-      error.value =
-        'Кабинет UNEC не отдаёт данные за прошлые годы по нашему запросу — ' +
-        'они доступны только в текущем учебном году.'
+      error.value = t('grades.errPastYears')
       data.value = null
     } else {
-      error.value = err?.data?.detail ?? 'Не удалось загрузить.'
+      error.value = err?.data?.detail ?? t('common.loadFailed')
     }
   } finally {
     loading.value = false
@@ -255,7 +256,7 @@ async function refresh() {
     error.value = null
   } catch (e: unknown) {
     const err = e as { data?: { detail?: string } }
-    error.value = err?.data?.detail ?? 'Не удалось обновить.'
+    error.value = err?.data?.detail ?? t('common.refreshFailed')
   } finally {
     refreshing.value = false
   }
@@ -385,7 +386,11 @@ function statsFor(subject: SubjectOut): SubjectStats {
 }
 
 function pluralizeMarks(n: number): string {
-  return pluralize(n, ['отметка', 'отметки', 'отметок'])
+  return pluralize(n, t('grades.marksPlural') as unknown as [string, string, string])
+}
+
+function pluralizeSubjects(n: number): string {
+  return pluralize(n, t('grades.subjectsPlural') as unknown as [string, string, string])
 }
 
 function formatPercent(n: number): string {
@@ -420,7 +425,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
 
 <template>
   <div>
-    <PageHeader eyebrow="Журнал" title="Электронный журнал">
+    <PageHeader :eyebrow="t('grades.eyebrow')" :title="t('grades.title')">
       <template #actions>
         <span v-if="lastSyncedRel" class="text-micro text-muted font-mono">
           <span class="hidden sm:inline">Sync · </span>{{ lastSyncedRel }}
@@ -428,7 +433,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
         <button
           :disabled="refreshing"
           class="ml-auto mr-1 sm:ml-0 sm:mr-0 flex items-center gap-2 border border-ink-soft hover:border-ink hover:text-ink text-ink-soft px-3 sm:px-4 py-2 text-[0.85rem] tracking-tight transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-          :aria-label="refreshing ? 'Тянем' : 'Обновить'"
+          :aria-label="refreshing ? t('common.fetching') : t('common.refresh')"
           @click="refresh"
         >
           <svg
@@ -438,13 +443,13 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
             <path d="M14 8a6 6 0 1 1-2-4.5L14 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             <path d="M14 1.5v3.5h-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <span class="hidden sm:inline">{{ refreshing ? 'Тянем…' : 'Обновить' }}</span>
+          <span class="hidden sm:inline">{{ refreshing ? t('common.fetchingShort') : t('common.refresh') }}</span>
         </button>
       </template>
       <template #below>
         <div class="mt-5 flex flex-wrap items-center gap-x-6 sm:gap-x-7 gap-y-3">
           <FilterSelect
-            label="год"
+            :label="t('exams.yearLabel')"
             :options="EDU_YEAR_OPTIONS"
             :model-value="selectedYearId"
             @update:model-value="(v) => (selectedYearId = Number(v))"
@@ -452,7 +457,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
           <FilterSelect
             v-if="semesterOptions.length"
             class="ml-auto mr-1 sm:ml-0 sm:mr-0"
-            label="семестр"
+            :label="t('exams.semesterLabel')"
             :options="semesterOptions"
             :model-value="selectedSemesterId"
             @update:model-value="(v) => (selectedSemesterId = Number(v))"
@@ -478,7 +483,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
           class="text-micro font-mono uppercase tracking-wider text-mark-negative hover:text-ink cursor-pointer"
           @click="error = null"
         >
-          закрыть
+          {{ t('common.close') }}
         </button>
       </div>
 
@@ -492,19 +497,18 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
 
       <!-- No UNEC creds -->
       <div v-else-if="error === 'unec_creds_missing'" class="hairline-t pt-12 max-w-2xl">
-        <div class="eyebrow mb-4">Нужно действие</div>
-        <h2 class="text-display text-ink leading-tight mb-4"
->
-          Сначала привяжите аккаунт UNEC
+        <div class="eyebrow mb-4">{{ t('common.actionRequired') }}</div>
+        <h2 class="text-display text-ink leading-tight mb-4">
+          {{ t('grades.linkUnecTitle') }}
         </h2>
         <p class="text-ink-soft mb-8 max-w-lg">
-          Без логина и пароля от
+          {{ t('grades.linkUnecBody1') }}
           <span class="font-mono text-[0.9em] bg-bg-deep px-1 rounded-sm">kabinet.unec.edu.az</span>
-          мы не можем тянуть ваш журнал.
+          {{ t('grades.linkUnecBody2') }}
         </p>
         <RouterLink :to="{ name: 'settings' }"
           class="inline-block bg-ink text-bg px-6 py-2.5 text-[0.9rem] hover:bg-ink-soft transition-colors">
-          Перейти в настройки →
+          {{ t('common.goToSettings') }}
         </RouterLink>
       </div>
 
@@ -515,7 +519,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
 
       <!-- Empty -->
       <div v-else-if="!data?.subjects.length" class="text-muted hairline-t pt-12">
-        В выбранном семестре нет предметов.
+        {{ t('grades.noSubjects') }}
       </div>
 
       <!-- Subject list (editorial table-of-contents style) -->
@@ -539,7 +543,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                 <div class="mt-2.5 flex items-baseline gap-x-7 gap-y-2 flex-wrap text-[0.85rem]">
                   <!-- Credits -->
                   <span v-if="subject.credits" class="flex items-baseline gap-1.5">
-                    <span class="text-muted text-[0.78rem]">кредиты</span>
+                    <span class="text-muted text-[0.78rem]">{{ t('grades.credits') }}</span>
                     <span class="font-mono text-ink">{{ subject.credits }}</span>
                   </span>
 
@@ -555,7 +559,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                         'text-mark-warning': statsFor(subject).absenceLevel === 'warn',
                         'text-mark-negative': statsFor(subject).absenceLevel === 'cut',
                       }"
-                    >пропуски</span>
+                    >{{ t('grades.absences') }}</span>
                     <span
                       class="font-mono"
                       :class="{
@@ -567,12 +571,12 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                     <span
                       v-if="statsFor(subject).absenceLevel === 'cut'"
                       class="text-micro font-mono uppercase tracking-wider text-mark-negative"
-                    >· срез</span>
+                    >{{ t('grades.cut') }}</span>
                   </span>
 
                   <!-- Seminar — score / max + mark count in parens -->
                   <span v-if="statsFor(subject).seminar" class="flex items-baseline gap-1.5">
-                    <span class="text-muted text-[0.78rem]">семинар</span>
+                    <span class="text-muted text-[0.78rem]">{{ t('grades.seminar') }}</span>
                     <span class="font-mono text-ink">
                       {{ statsFor(subject).seminar!.average }}<template v-if="statsFor(subject).seminar!.max"
                         ><span class="text-muted-soft">/</span><span class="text-muted">{{ statsFor(subject).seminar!.max }}</span></template>
@@ -587,7 +591,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
 
                   <!-- Current score -->
                   <span v-if="statsFor(subject).currentScore" class="flex items-baseline gap-1.5">
-                    <span class="text-muted text-[0.78rem]">набрано</span>
+                    <span class="text-muted text-[0.78rem]">{{ t('grades.scored') }}</span>
                     <span class="font-mono text-ink">
                       {{ statsFor(subject).currentScore!.value }}<template v-if="statsFor(subject).currentScore!.max"
                         ><span class="text-muted-soft">/</span><span class="text-muted">{{ statsFor(subject).currentScore!.max }}</span></template>
@@ -603,7 +607,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                     "
                     class="text-muted text-[0.82rem]"
                   >
-                    пока без оценок
+                    {{ t('grades.noMarksYet') }}
                   </span>
                 </div>
               </div>
@@ -613,9 +617,9 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                 <span
                   v-if="hasClassToday(subject)"
                   class="text-[0.65rem] sm:text-micro font-mono uppercase tracking-wider text-bg bg-ink px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-sm whitespace-nowrap"
-                  title="Сегодня по этому предмету есть пара"
+                  :title="t('grades.todayLesson')"
                 >
-                  сегодня
+                  {{ t('common.today') }}
                 </span>
               </div>
 
@@ -670,20 +674,20 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
               v-else
               class="ml-0 sm:ml-12 text-muted text-[0.9rem]"
             >
-              Пока ничего не выставлено.
+              {{ t('grades.noFinalEval') }}
             </div>
 
             <div v-if="activeLessonType(subject)" class="ml-0 sm:ml-12 grid lg:grid-cols-[1.3fr_1fr] gap-10 lg:gap-12">
               <!-- Marks table -->
               <section>
                 <div class="flex items-center gap-3 mb-4">
-                  <span class="eyebrow">Отметки по датам</span>
+                  <span class="eyebrow">{{ t('grades.marksByDate') }}</span>
                   <span class="hairline flex-1 border-t" />
                 </div>
 
                 <div v-if="!activeLessonType(subject)!.marks.length"
                   class="text-muted text-[0.9rem]">
-                  Нет отметок.
+                  {{ t('grades.noMarks') }}
                 </div>
 
                 <table v-else class="w-full">
@@ -711,7 +715,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                 <!-- Yekun -->
                 <div v-if="nonEmptyEntries(activeLessonType(subject)!.final_eval).length">
                   <div class="flex items-center gap-3 mb-4">
-                    <span class="eyebrow">Текущий итог</span>
+                    <span class="eyebrow">{{ t('grades.currentTotal') }}</span>
                     <span class="hairline flex-1 border-t" />
                   </div>
                   <dl class="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -730,7 +734,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                 <!-- Forma (max scores schema) -->
                 <div v-if="nonEmptyEntries(activeLessonType(subject)!.scheme).length">
                   <div class="flex items-center gap-3 mb-4">
-                    <span class="eyebrow">Шкала максимума</span>
+                    <span class="eyebrow">{{ t('grades.maxScale') }}</span>
                     <span class="hairline flex-1 border-t" />
                   </div>
                   <dl class="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -753,7 +757,7 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
                   v-if="nonEmptyEntries(activeLessonType(subject)!.course_work).length"
                   class="text-[0.85rem] text-ink-soft"
                 >
-                  <span class="eyebrow block mb-2">Курсовая работа</span>
+                  <span class="eyebrow block mb-2">{{ t('grades.courseWork') }}</span>
                   <dl class="grid grid-cols-2 gap-x-6 gap-y-2">
                     <template
                       v-for="[k, v] in nonEmptyEntries(activeLessonType(subject)!.course_work)"
@@ -781,10 +785,3 @@ function sortedMarks(marks: LessonTypeMarksOut['marks']) {
   </div>
 </template>
 
-<script lang="ts">
-import { pluralize } from '@/lib/locale'
-
-function pluralizeSubjects(n: number): string {
-  return pluralize(n, ['предмет', 'предмета', 'предметов'])
-}
-</script>

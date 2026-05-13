@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   code: string | null
@@ -17,8 +20,8 @@ const kind = computed<Kind>(() => {
 })
 
 const tooltip = computed(() => {
-  if (kind.value === 'positive') return 'iştirak edib · присутствовал'
-  if (kind.value === 'negative') return 'qaib · пропустил'
+  if (kind.value === 'positive') return `iştirak edib · ${t('markBadge.presentRu')}`
+  if (kind.value === 'negative') return `qaib · ${t('markBadge.absentRu')}`
   return ''
 })
 

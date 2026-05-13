@@ -1,8 +1,9 @@
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { ofetch } from 'ofetch'
 import type { UserOut } from '@/api/types'
+import { setAppLocale, SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -19,6 +20,19 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   const isAuthenticated = computed(() => Boolean(user.value))
+
+  // Keep the i18n locale in sync with the logged-in user's stored
+  // preference. Runs on initial hydration (useStorage rehydrates `user`
+  // synchronously) and on every subsequent change.
+  watch(
+    () => user.value?.language,
+    (lang) => {
+      if (lang && (SUPPORTED_LOCALES as string[]).includes(lang)) {
+        setAppLocale(lang as AppLocale)
+      }
+    },
+    { immediate: true },
+  )
 
   async function register(email: string, password: string) {
     await ofetch(`${baseURL}/v1/auth/register`, {
@@ -63,6 +77,19 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
+  /** Persist a new UI language: PATCH the user record, then update the
+   *  local cache so the watcher above re-applies the locale. */
+  async function setLanguage(lang: AppLocale) {
+    const me = await ofetch<UserOut>(`${baseURL}/v1/auth/me`, {
+      method: 'PATCH',
+      body: { language: lang },
+      credentials: 'include',
+    })
+    user.value = me
+    setAppLocale(lang)
+    return me
+  }
+
   return {
     user,
     isAuthenticated,
@@ -71,5 +98,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchMe,
     clear,
+    setLanguage,
   }
 })

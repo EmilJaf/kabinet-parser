@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
+
+const { t } = useI18n()
 import type {
   CalendarTodayOut,
   GradesOut,
@@ -85,22 +88,24 @@ const upcomingCountdown = computed<string | null>(() => {
   const start = todayAt(u.lesson.start)
   if (u.status === 'in_progress') {
     const end = todayAt(u.lesson.end)
-    return `идёт · до конца ${humanMinutes(end.getTime() - now.value.getTime())}`
+    return t('time.inProgressUntilEnd', { duration: humanMinutes(end.getTime() - now.value.getTime()) })
   }
   if (u.status === 'today') {
-    return `до начала ${humanMinutes(start.getTime() - now.value.getTime())}`
+    return t('time.untilStart', { duration: humanMinutes(start.getTime() - now.value.getTime()) })
   }
   // Future day: just say which day it's on; no minute-level countdown.
   return dayName(u.day === 7 ? 0 : u.day)
 })
 
 function humanMinutes(ms: number): string {
+  const minutesForms = t('time.minutesPlural') as unknown as [string, string, string]
+  const hoursForms = t('time.hoursPlural') as unknown as [string, string, string]
   const totalMin = Math.max(0, Math.floor(ms / 60000))
-  if (totalMin < 60) return `${totalMin} ${pluralRu(totalMin, ['минута', 'минуты', 'минут'])}`
+  if (totalMin < 60) return `${totalMin} ${pluralRu(totalMin, minutesForms)}`
   const h = Math.floor(totalMin / 60)
   const m = totalMin % 60
-  if (m === 0) return `${h} ${pluralRu(h, ['час', 'часа', 'часов'])}`
-  return `${h} ч ${m} мин`
+  if (m === 0) return `${h} ${pluralRu(h, hoursForms)}`
+  return t('time.hoursMinutes', { h, m })
 }
 
 function pluralRu(n: number, forms: [string, string, string]): string {
@@ -392,31 +397,31 @@ function lessonTimeBlock(lesson: LessonOut): string {
   <div>
     <!-- Header — large date instead of generic "Dashboard" -->
     <header class="px-6 sm:px-8 lg:px-12 pt-6 sm:pt-9 lg:pt-10 pb-5 lg:pb-6">
-      <div class="eyebrow mb-4">Сегодня</div>
+      <div class="eyebrow mb-4">{{ t('dashboard.eyebrow') }}</div>
       <h1
         class="text-[2rem] sm:text-display-xl text-ink leading-[1.05] sm:leading-[1] tracking-tight"
       >
         {{ headerDate }}
       </h1>
       <p v-if="lastSync" class="mt-4 text-micro text-muted font-mono">
-        последняя синхронизация · {{ lastSync }}
+        {{ t('common.lastSync') }} · {{ lastSync }}
       </p>
     </header>
 
     <!-- Missing UNEC creds — full-width prompt -->
     <div v-if="credsMissing && !loading" class="px-6 sm:px-8 lg:px-12 pb-12 lg:pb-16">
       <div class="hairline-t pt-12 max-w-2xl">
-        <div class="eyebrow mb-4">Нужно действие</div>
+        <div class="eyebrow mb-4">{{ t('common.actionRequired') }}</div>
         <h2 class="text-display text-ink leading-tight mb-4"
 >
-          Подключите аккаунт UNEC
+          {{ t('dashboard.linkUnecAction') }}
         </h2>
         <p class="text-ink-soft mb-8 max-w-lg">
-          Без него Kabinet — пустая оболочка. Подключение занимает минуту.
+          {{ t('dashboard.linkUnecDesc') }}
         </p>
         <RouterLink :to="{ name: 'settings' }"
           class="inline-block bg-ink text-bg px-6 py-2.5 text-[0.9rem] hover:bg-ink-soft transition-colors">
-          В настройки →
+          {{ t('dashboard.linkUnecCta') }}
         </RouterLink>
       </div>
     </div>
@@ -426,7 +431,7 @@ function lessonTimeBlock(lesson: LessonOut): string {
       <!-- LEFT: Today / next class -->
       <section>
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Расписание на сегодня</span>
+          <span class="eyebrow">{{ t('dashboard.todaySchedule') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
@@ -485,7 +490,7 @@ function lessonTimeBlock(lesson: LessonOut): string {
                 weight="duotone"
                 aria-hidden="true"
               />
-              <span>Праздник: {{ calendar.holiday_name }}</span>
+              <span>{{ t('dashboard.holiday', { name: calendar.holiday_name }) }}</span>
             </div>
             <div
               v-else-if="calendar?.is_weekend"
@@ -497,7 +502,7 @@ function lessonTimeBlock(lesson: LessonOut): string {
                 weight="regular"
                 aria-hidden="true"
               />
-              <span>Сегодня выходной</span>
+              <span>{{ t('dashboard.weekend') }}</span>
             </div>
             <div
               v-else-if="lessonsAllDone"
@@ -509,16 +514,16 @@ function lessonTimeBlock(lesson: LessonOut): string {
                 weight="regular"
                 aria-hidden="true"
               />
-              <span>На сегодня всё</span>
+              <span>{{ t('dashboard.allDone') }}</span>
             </div>
             <p v-else class="text-[1.5rem] text-ink-soft leading-tight">
-              Сегодня свободно.
+              {{ t('dashboard.free') }}
             </p>
             <p
               v-if="calendar && !calendar.is_workday"
               class="text-[0.85rem] text-muted mt-2 pl-[34px]"
             >
-              Следующий рабочий день — {{ formatDate(parseISODate(calendar.next_workday)) }}.
+              {{ t('dashboard.nextWorkday', { date: formatDate(parseISODate(calendar.next_workday)) }) }}
             </p>
           </div>
           <div v-if="upcomingLesson" class="grid grid-cols-[5.5rem_1fr] gap-6">
@@ -527,14 +532,14 @@ function lessonTimeBlock(lesson: LessonOut): string {
               <div class="text-muted text-[0.72rem] mt-0.5 uppercase tracking-wider">
                 {{
                   upcomingLesson.status === 'in_progress' || upcomingLesson.status === 'today'
-                    ? 'сегодня'
+                    ? t('common.today')
                     : dayName(upcomingLesson.day === 7 ? 0 : upcomingLesson.day, true)
                 }}
               </div>
             </div>
             <div>
               <div class="eyebrow mb-1.5">
-                {{ upcomingLesson.status === 'in_progress' ? 'Идёт сейчас' : 'Следующая пара' }}
+                {{ upcomingLesson.status === 'in_progress' ? t('dashboard.inProgress') : t('dashboard.nextLesson') }}
               </div>
               <div class="text-[1.05rem] text-ink leading-snug">
                 {{ upcomingLesson.lesson.subject }}
@@ -569,7 +574,7 @@ function lessonTimeBlock(lesson: LessonOut): string {
           :to="{ name: 'schedule' }"
           class="mt-10 inline-block text-[0.9rem] text-ink-soft hover:text-ink transition-colors"
         >
-          Вся неделя
+          {{ t('dashboard.wholeWeek') }}
           <span class="ml-1">→</span>
         </RouterLink>
       </section>
@@ -577,7 +582,7 @@ function lessonTimeBlock(lesson: LessonOut): string {
       <!-- RIGHT: Recent marks -->
       <section>
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Свежие отметки</span>
+          <span class="eyebrow">{{ t('dashboard.freshMarks') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
@@ -611,14 +616,14 @@ function lessonTimeBlock(lesson: LessonOut): string {
         </ul>
 
         <div v-else class="text-muted text-[0.9rem]">
-          Нет отметок за этот семестр.
+          {{ t('dashboard.noMarks') }}
         </div>
 
         <RouterLink
           :to="{ name: 'grades' }"
           class="mt-10 inline-block text-[0.9rem] text-ink-soft hover:text-ink transition-colors"
         >
-          Журнал целиком
+          {{ t('dashboard.fullJournal') }}
           <span class="ml-1">→</span>
         </RouterLink>
       </section>

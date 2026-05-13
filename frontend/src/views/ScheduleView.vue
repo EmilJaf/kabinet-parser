@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import type { LessonOut, ScheduleOut } from '@/api/types'
@@ -8,21 +9,15 @@ import Skeleton from '@/components/Skeleton.vue'
 import { relativeTime, shortTime, todayIsoDow } from '@/lib/time'
 import { lessonTypeRu } from '@/lib/locale'
 
+const { t } = useI18n()
+
 const data = ref<ScheduleOut | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref<string | null>(null)
 
-const DAY_LABELS_LONG = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-const DAY_LABELS_FULL = [
-  'Понедельник',
-  'Вторник',
-  'Среда',
-  'Четверг',
-  'Пятница',
-  'Суббота',
-  'Воскресенье',
-]
+const DAY_LABELS_LONG = computed(() => t('time.weekDaysShort') as unknown as string[])
+const DAY_LABELS_FULL = computed(() => t('time.weekDaysLong') as unknown as string[])
 
 const todayDow = computed(() => todayIsoDow())
 
@@ -112,7 +107,7 @@ async function fetchOnce() {
   } catch (e: unknown) {
     const err = e as { data?: { detail?: string }; status?: number }
     if (err?.status === 409) error.value = 'unec_creds_missing'
-    else error.value = err?.data?.detail ?? 'Не удалось загрузить расписание.'
+    else error.value = err?.data?.detail ?? t('common.loadFailed')
   }
 }
 
@@ -142,7 +137,7 @@ async function refresh() {
     error.value = null
   } catch (e: unknown) {
     const err = e as { data?: { detail?: string } }
-    error.value = err?.data?.detail ?? 'Не удалось обновить.'
+    error.value = err?.data?.detail ?? t('common.refreshFailed')
   } finally {
     refreshing.value = false
   }
@@ -150,14 +145,14 @@ async function refresh() {
 
 function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: string } | null {
   if (p === 'normal') return null
-  if (p === 'upper') return { label: 'верх', symbol: '◐' }
-  return { label: 'низ', symbol: '◑' }
+  if (p === 'upper') return { label: t('schedule.parityUpper'), symbol: '◐' }
+  return { label: t('schedule.parityLower'), symbol: '◑' }
 }
 </script>
 
 <template>
   <div>
-    <PageHeader eyebrow="Расписание" title="Эта неделя">
+    <PageHeader :eyebrow="t('schedule.eyebrow')" :title="t('schedule.title')">
       <template #actions>
         <span v-if="lastSyncedRel" class="text-micro text-muted font-mono">
           <span class="hidden sm:inline">Sync · </span>{{ lastSyncedRel }}
@@ -165,7 +160,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
         <button
           :disabled="refreshing"
           class="ml-auto mr-1 sm:ml-0 sm:mr-0 flex items-center gap-2 border border-ink-soft hover:border-ink hover:text-ink text-ink-soft px-3 sm:px-4 py-2 text-[0.85rem] tracking-tight transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-          :aria-label="refreshing ? 'Обновляем' : 'Обновить'"
+          :aria-label="refreshing ? t('common.refreshing') : t('common.refresh')"
           @click="refresh"
         >
           <svg
@@ -175,7 +170,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
             <path d="M14 8a6 6 0 1 1-2-4.5L14 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             <path d="M14 1.5v3.5h-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <span class="hidden sm:inline">{{ refreshing ? 'Обновляем…' : 'Обновить' }}</span>
+          <span class="hidden sm:inline">{{ refreshing ? t('common.refreshing') + '…' : t('common.refresh') }}</span>
         </button>
       </template>
     </PageHeader>
@@ -191,7 +186,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
           class="text-micro font-mono uppercase tracking-wider text-mark-negative hover:text-ink cursor-pointer"
           @click="error = null"
         >
-          закрыть
+          {{ t('common.close') }}
         </button>
       </div>
 
@@ -248,23 +243,23 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
         v-else-if="error === 'unec_creds_missing'"
         class="hairline-t pt-12 max-w-2xl"
       >
-        <div class="eyebrow mb-4">Нужно действие</div>
+        <div class="eyebrow mb-4">{{ t('common.actionRequired') }}</div>
         <h2
           class="text-display text-ink leading-tight mb-4"
 
         >
-          Сначала привяжите аккаунт UNEC
+          {{ t('schedule.linkUnecTitle') }}
         </h2>
         <p class="text-ink-soft mb-8 max-w-lg">
-          Без логина и пароля от
+          {{ t('schedule.linkUnecBody1') }}
           <span class="font-mono text-[0.9em] bg-bg-deep px-1 rounded-sm">kabinet.unec.edu.az</span>
-          мы не можем тянуть ваше расписание.
+          {{ t('schedule.linkUnecBody2') }}
         </p>
         <RouterLink
           :to="{ name: 'settings' }"
           class="inline-block bg-ink text-bg px-6 py-2.5 text-[0.9rem] hover:bg-ink-soft transition-colors"
         >
-          Перейти в настройки →
+          {{ t('common.goToSettings') }}
         </RouterLink>
       </div>
 
@@ -275,7 +270,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
 
       <!-- Empty (no lessons even after sync) -->
       <div v-else-if="!data?.lessons.length" class="text-muted hairline-t pt-12">
-        В кабинете не нашлось ни одной пары.
+        {{ t('schedule.noLessons') }}
       </div>
 
       <!-- Mobile: per-day vertical list (lg+ uses the table grid below) -->
@@ -294,7 +289,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
               v-if="dc.day === todayDow"
               class="text-micro font-mono uppercase tracking-wider text-bg bg-ink px-1.5 py-0.5 rounded-sm"
             >
-              сегодня
+              {{ t('common.today') }}
             </span>
           </div>
 
@@ -322,7 +317,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
                     class="text-micro font-mono uppercase tracking-wider text-muted mb-1 flex items-center gap-1.5"
                   >
                     <span class="text-ink">{{ parityBadge(lesson.week_parity)!.symbol }}</span>
-                    <span>{{ parityBadge(lesson.week_parity)!.label }} нед</span>
+                    <span>{{ parityBadge(lesson.week_parity)!.label }} {{ t('schedule.weekShort') }}</span>
                   </div>
 
                   <div v-if="lesson.room" class="mb-1.5">
@@ -349,7 +344,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
             v-if="!grid.timeSlots.some((s) => dc.groupsByStart.get(`${s.start}-${s.end}`))"
             class="text-muted text-[0.85rem] px-1"
           >
-            Нет занятий.
+            {{ t('schedule.noLessonsDay') }}
           </p>
         </section>
       </div>
@@ -359,7 +354,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
         v-if="data?.sync_status === 'error' && data.sync_error"
         class="mt-6 text-micro text-mark-negative"
       >
-        Ошибка последней синхронизации: {{ data.sync_error }}
+        {{ t('schedule.syncErrorPrefix', { detail: data.sync_error }) }}
       </div>
 
       <!-- Desktop: full week table grid -->
@@ -370,7 +365,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
               <th
                 class="hairline-r hairline-b w-[88px] py-4 px-3 text-left align-bottom"
               >
-                <span class="eyebrow">Время</span>
+                <span class="eyebrow">{{ t('schedule.weekHeader') }}</span>
               </th>
               <th
                 v-for="dc in grid.days"
@@ -390,7 +385,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
                     v-if="dc.day === todayDow"
                     class="text-micro font-mono uppercase tracking-wider text-accent"
                   >
-                    сегодня
+                    {{ t('common.today') }}
                   </span>
                 </div>
               </th>
@@ -429,7 +424,7 @@ function parityBadge(p: LessonOut['week_parity']): { label: string; symbol: stri
                       class="text-micro font-mono uppercase tracking-wider text-muted mb-1.5 flex items-center gap-1.5"
                     >
                       <span class="text-ink">{{ parityBadge(lesson.week_parity)!.symbol }}</span>
-                      <span>{{ parityBadge(lesson.week_parity)!.label }} нед</span>
+                      <span>{{ parityBadge(lesson.week_parity)!.label }} {{ t('schedule.weekShort') }}</span>
                     </div>
 
                     <!-- Room — pulled out as the visually dominant element -->

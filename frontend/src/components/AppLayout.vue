@@ -1,26 +1,27 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import InitialSyncBanner from './InitialSyncBanner.vue'
 
+const { t } = useI18n()
 const route = useRoute()
 const auth = useAuthStore()
 
-const baseSections = [
-  { name: 'dashboard', label: 'Сегодня', shortcut: 'Д' },
-  { name: 'schedule', label: 'Расписание', shortcut: 'Р' },
-  { name: 'grades', label: 'Журнал', shortcut: 'Ж' },
-  { name: 'exams', label: 'Экзамены', shortcut: 'Э' },
-  { name: 'files', label: 'Материалы', shortcut: 'М' },
-  { name: 'settings', label: 'Настройки', shortcut: 'Н' },
-]
-
 const sections = computed(() => {
+  const base = [
+    { name: 'dashboard', label: t('nav.dashboard') },
+    { name: 'schedule', label: t('nav.schedule') },
+    { name: 'grades', label: t('nav.grades') },
+    { name: 'exams', label: t('nav.exams') },
+    { name: 'files', label: t('nav.files') },
+    { name: 'settings', label: t('nav.settings') },
+  ]
   if (auth.user?.is_admin) {
-    return [...baseSections, { name: 'admin', label: 'Админка', shortcut: 'А' }]
+    return [...base, { name: 'admin', label: t('nav.admin') }]
   }
-  return baseSections
+  return base
 })
 
 const activeName = computed(() => route.name)
@@ -72,7 +73,7 @@ watch(() => route.fullPath, () => (drawerOpen.value = false))
         </RouterLink>
         <button
           class="lg:hidden -mr-2 -mt-1 p-2 text-muted hover:text-ink cursor-pointer"
-          aria-label="Закрыть меню"
+          :aria-label="t('common.closeMenu')"
           @click="drawerOpen = false"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -102,9 +103,6 @@ watch(() => route.fullPath, () => (drawerOpen.value = false))
                 />
                 {{ s.label }}
               </span>
-              <span class="font-mono text-[0.65rem] text-muted-soft hidden sm:inline">
-                {{ s.shortcut }}
-              </span>
             </RouterLink>
           </li>
         </ul>
@@ -129,7 +127,7 @@ watch(() => route.fullPath, () => (drawerOpen.value = false))
               class="text-micro mt-0.5 text-muted hover:text-ink transition-colors cursor-pointer"
               @click="auth.logout()"
             >
-              Выйти
+              {{ t('nav.logout') }}
             </button>
           </div>
         </div>
@@ -150,7 +148,7 @@ watch(() => route.fullPath, () => (drawerOpen.value = false))
       >
         <button
           class="-ml-2 p-2 text-ink cursor-pointer"
-          aria-label="Открыть меню"
+          :aria-label="t('common.openMenu')"
           @click="drawerOpen = true"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">

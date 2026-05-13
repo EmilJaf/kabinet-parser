@@ -3,6 +3,11 @@
  * IDs are stable across users (verified from real responses), so we hardcode
  * them here instead of asking the backend on every navigation.
  */
+import { i18n } from '@/i18n'
+
+function tStr(key: string, vars?: Record<string, unknown>): string {
+  return i18n.global.t(key, vars ?? {}) as string
+}
 
 // Generic over the id type so the same component handles both numeric
 // IDs (most filters) and arbitrary strings (e.g. teacher hashes from
@@ -32,35 +37,28 @@ export const EDU_YEAR_OPTIONS: UnecOption[] = [
   { id: 1000012, label: '2010 — 2011' },
 ]
 
-export const SEMESTER_OPTIONS: UnecOption[] = [
-  { id: 1000109, label: 'I семестр' },
-  { id: 1000111, label: 'II семестр' },
-  { id: 1000112, label: 'Летний семестр' },
-]
-
 export function eduYearLabel(id: number | null | undefined): string {
   if (id == null) return ''
   return EDU_YEAR_OPTIONS.find((o) => o.id === id)?.label ?? `${id}`
 }
 
-export function semesterLabel(id: number | null | undefined): string {
-  if (id == null) return ''
-  return SEMESTER_OPTIONS.find((o) => o.id === id)?.label ?? `${id}`
-}
-
 // Exam type filter — local IDs map to UNEC's Azerbaijani exam_type_name
 // (the backend filters by name, not numeric id). 0 means "no filter".
-export const EXAM_TYPE_OPTIONS: UnecOption[] = [
-  { id: 0, label: 'Все типы' },
-  { id: 1, label: 'Финальный' },
-  { id: 2, label: 'Финальный 1' },
-  { id: 3, label: 'Финальный 2' },
-  { id: 4, label: 'Финальный 3' },
-  { id: 5, label: 'Промежуточный 1' },
-  { id: 6, label: 'Промежуточный 2' },
-  { id: 7, label: 'Промежуточный 3' },
-  { id: 8, label: 'ИГА' },
-]
+// Labels are resolved from the i18n catalog at access time so they react
+// to language switches.
+export function getExamTypeOptions(): UnecOption[] {
+  return [
+    { id: 0, label: tStr('exams.allTypes') },
+    { id: 1, label: tStr('exams.typeFinal') },
+    { id: 2, label: tStr('exams.typeFinalN', { n: 1 }) },
+    { id: 3, label: tStr('exams.typeFinalN', { n: 2 }) },
+    { id: 4, label: tStr('exams.typeFinalN', { n: 3 }) },
+    { id: 5, label: tStr('exams.typeMidtermN', { n: 1 }) },
+    { id: 6, label: tStr('exams.typeMidtermN', { n: 2 }) },
+    { id: 7, label: tStr('exams.typeMidtermN', { n: 3 }) },
+    { id: 8, label: tStr('exams.typeState') },
+  ]
+}
 
 const EXAM_TYPE_AZ_BY_ID: Record<number, string> = {
   1: 'Yekun imtahan',

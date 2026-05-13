@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
@@ -49,7 +52,7 @@ onUnmounted(() => {
       >
         <button
           class="fixed top-4 right-4 z-10 w-9 h-9 flex items-center justify-center bg-bg/10 text-bg hover:bg-bg/20 rounded-full transition-colors cursor-pointer"
-          aria-label="Закрыть"
+          :aria-label="t('imageLightbox.close')"
           @click="close"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -73,7 +76,7 @@ onUnmounted(() => {
           v-if="zoomed"
           class="fixed bottom-4 left-1/2 -translate-x-1/2 text-bg/70 text-micro font-mono uppercase tracking-wider"
         >
-          клик — уменьшить
+          {{ t('imageLightbox.clickToShrink') }}
         </div>
       </div>
     </Transition>

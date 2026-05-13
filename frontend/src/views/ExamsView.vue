@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
+
+const { t } = useI18n()
 import type { ExamOut, ExamQuestionsOut, ExamsOut } from '@/api/types'
 import PageHeader from '@/components/PageHeader.vue'
 import Skeleton from '@/components/Skeleton.vue'
@@ -11,8 +14,8 @@ import { formatDate, parseISODate, relativeTime, shortTime } from '@/lib/time'
 import { examFormRu, examGradeLabelRu, examTypeRu, semesterLabelRu } from '@/lib/locale'
 import {
   EDU_YEAR_OPTIONS,
-  EXAM_TYPE_OPTIONS,
   examTypeAzKey,
+  getExamTypeOptions,
   type UnecOption,
 } from '@/lib/unec'
 
@@ -39,6 +42,9 @@ const availableSemesters = ref<UnecOption[]>([])
 const semesterOptions = computed<UnecOption[]>(() =>
   availableSemesters.value.map((s) => ({ id: s.id, label: semesterLabelRu(s.label) })),
 )
+
+// Re-derived from the i18n catalog so it tracks language changes.
+const examTypeOptions = computed<UnecOption[]>(() => getExamTypeOptions())
 
 const lastSyncedRel = computed(() =>
   data.value?.last_synced_at ? relativeTime(new Date(data.value.last_synced_at)) : null,
@@ -153,11 +159,10 @@ async function load() {
     if (err?.status === 409) {
       error.value = 'unec_creds_missing'
     } else if (err?.data?.detail === 'historical_years_unavailable') {
-      error.value =
-        'Кабинет UNEC не отдаёт результаты за прошлые годы по нашему запросу.'
+      error.value = t('exams.errPastYears')
       data.value = null
     } else {
-      error.value = err?.data?.detail ?? 'Не удалось загрузить.'
+      error.value = err?.data?.detail ?? t('common.loadFailed')
     }
   } finally {
     loading.value = false
@@ -174,7 +179,7 @@ async function refresh() {
     error.value = null
   } catch (e: unknown) {
     const err = e as { data?: { detail?: string } }
-    error.value = err?.data?.detail ?? 'Не удалось обновить.'
+    error.value = err?.data?.detail ?? t('common.refreshFailed')
   } finally {
     refreshing.value = false
   }
@@ -213,11 +218,12 @@ function gradeColor(letter: string | null): string {
 }
 
 function pluralizeExams(n: number): string {
+  const forms = t('exams.examPlural') as unknown as [string, string, string]
   const m10 = n % 10
   const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return 'экзамен'
-  if ([2, 3, 4].includes(m10) && ![12, 13, 14].includes(m100)) return 'экзамена'
-  return 'экзаменов'
+  if (m10 === 1 && m100 !== 11) return forms[0]
+  if ([2, 3, 4].includes(m10) && ![12, 13, 14].includes(m100)) return forms[1]
+  return forms[2]
 }
 
 // Per-exam expansion state — one cache entry per exam_id.
@@ -244,7 +250,7 @@ async function toggleExam(exam: ExamOut) {
       )
     } catch (e: unknown) {
       const err = e as { data?: { detail?: string } }
-      questionsCache[exam.id].error = err?.data?.detail ?? 'Не удалось загрузить вопросы.'
+      questionsCache[exam.id].error = err?.data?.detail ?? t('examQuestion.loadQuestionsFailed')
     } finally {
       questionsCache[exam.id].loading = false
     }
@@ -258,15 +264,15 @@ function statusColor(status: 'correct' | 'wrong' | 'unknown'): string {
 }
 
 function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
-  if (status === 'correct') return 'Правильно'
-  if (status === 'wrong') return 'Неправильно'
+  if (status === 'correct') return t('examQuestion.correctTooltip')
+  if (status === 'wrong') return t('examQuestion.wrongTooltip')
   return '—'
 }
 </script>
 
 <template>
   <div>
-    <PageHeader eyebrow="Экзамены" title="Результаты сессий">
+    <PageHeader :eyebrow="t('exams.eyebrow')" :title="t('exams.title')">
       <template #actions>
         <span v-if="lastSyncedRel" class="text-micro text-muted font-mono">
           <span class="hidden sm:inline">Sync · </span>{{ lastSyncedRel }}
@@ -274,7 +280,7 @@ function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
         <button
           :disabled="refreshing"
           class="ml-auto mr-1 sm:ml-0 sm:mr-0 flex items-center gap-2 border border-ink-soft hover:border-ink hover:text-ink text-ink-soft px-3 sm:px-4 py-2 text-[0.85rem] tracking-tight transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-          :aria-label="refreshing ? 'Тянем' : 'Обновить'"
+          :aria-label="refreshing ? t('common.fetching') : t('common.refresh')"
           @click="refresh"
         >
           <svg
@@ -284,28 +290,28 @@ function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
             <path d="M14 8a6 6 0 1 1-2-4.5L14 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             <path d="M14 1.5v3.5h-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <span class="hidden sm:inline">{{ refreshing ? 'Тянем…' : 'Обновить' }}</span>
+          <span class="hidden sm:inline">{{ refreshing ? t('common.fetchingShort') : t('common.refresh') }}</span>
         </button>
       </template>
       <template #below>
         <div class="mt-5 flex flex-wrap items-center gap-x-6 sm:gap-x-7 gap-y-3">
           <FilterSelect
-            label="год"
+            :label="t('exams.yearLabel')"
             :options="EDU_YEAR_OPTIONS"
             :model-value="selectedYearId"
             @update:model-value="(v) => (selectedYearId = Number(v))"
           />
           <FilterSelect
             v-if="semesterOptions.length"
-            label="семестр"
+            :label="t('exams.semesterLabel')"
             :options="semesterOptions"
             :model-value="selectedSemesterId"
             @update:model-value="(v) => (selectedSemesterId = Number(v))"
           />
           <FilterSelect
             class="ml-auto mr-1 sm:ml-0 sm:mr-0"
-            label="тип"
-            :options="EXAM_TYPE_OPTIONS"
+            :label="t('exams.typeLabel')"
+            :options="examTypeOptions"
             :model-value="selectedExamTypeId"
             @update:model-value="(v) => (selectedExamTypeId = Number(v))"
           />
@@ -330,7 +336,7 @@ function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
           class="text-micro font-mono uppercase tracking-wider text-mark-negative hover:text-ink cursor-pointer"
           @click="error = null"
         >
-          закрыть
+          {{ t('common.close') }}
         </button>
       </div>
 
@@ -347,18 +353,18 @@ function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
 
       <!-- No UNEC creds -->
       <div v-else-if="error === 'unec_creds_missing'" class="hairline-t pt-12 max-w-2xl">
-        <div class="eyebrow mb-4">Нужно действие</div>
+        <div class="eyebrow mb-4">{{ t('common.actionRequired') }}</div>
         <h2 class="text-display text-ink leading-tight mb-4">
-          Сначала привяжите аккаунт UNEC
+          {{ t('exams.linkUnecTitle') }}
         </h2>
         <p class="text-ink-soft mb-8 max-w-lg">
-          Без логина и пароля от
+          {{ t('exams.linkUnecBody1') }}
           <span class="font-mono text-[0.9em] bg-bg-deep px-1 rounded-sm">kabinet.unec.edu.az</span>
-          мы не можем тянуть ваши экзамены.
+          {{ t('exams.linkUnecBody2') }}
         </p>
         <RouterLink :to="{ name: 'settings' }"
           class="inline-block bg-ink text-bg px-6 py-2.5 text-[0.9rem] hover:bg-ink-soft transition-colors">
-          Перейти в настройки →
+          {{ t('common.goToSettings') }}
         </RouterLink>
       </div>
 
@@ -369,7 +375,7 @@ function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
 
       <!-- Empty -->
       <div v-else-if="!data?.exams.length" class="text-muted hairline-t pt-12">
-        В выбранном семестре нет результатов экзаменов.
+        {{ t('exams.noResults') }}
       </div>
 
       <!-- Exam groups -->
@@ -395,9 +401,9 @@ function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
             <thead>
               <tr class="text-micro font-mono uppercase tracking-wider text-muted-soft">
                 <th class="text-left font-normal pb-2"></th>
-                <th class="text-right font-normal pb-2">До</th>
-                <th class="text-right font-normal pb-2">Экзамен</th>
-                <th class="text-right font-normal pb-2">Итог</th>
+                <th class="text-right font-normal pb-2">{{ t('exams.colBefore') }}</th>
+                <th class="text-right font-normal pb-2">{{ t('exams.colExam') }}</th>
+                <th class="text-right font-normal pb-2">{{ t('exams.colTotal') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -494,11 +500,11 @@ function statusLabel(status: 'correct' | 'wrong' | 'unknown'): string {
                   class="mt-1.5 flex items-baseline gap-3 text-[0.75rem] text-muted"
                 >
                   <span v-if="exam.entry_score != null" class="flex items-baseline gap-1">
-                    <span class="text-muted-soft">до</span>
+                    <span class="text-muted-soft">{{ t('exams.shortBefore') }}</span>
                     <span class="font-mono tabular-nums text-ink-soft">{{ exam.entry_score }}</span>
                   </span>
                   <span v-if="exam.exam_score != null" class="flex items-baseline gap-1">
-                    <span class="text-muted-soft">экз</span>
+                    <span class="text-muted-soft">{{ t('exams.shortExam') }}</span>
                     <span class="font-mono tabular-nums text-ink-soft">{{ exam.exam_score }}</span>
                   </span>
                 </div>

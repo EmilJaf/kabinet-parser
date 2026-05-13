@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { ExamQuestionDetailOut } from '@/api/types'
 import Skeleton from './Skeleton.vue'
 import UnecImage from './UnecImage.vue'
+
+const { t } = useI18n()
 
 interface DetailState {
   loading: boolean
@@ -42,7 +45,7 @@ defineProps<{
     <UnecImage
       v-if="state.data.question_image_path"
       :src="state.data.question_image_path"
-      alt="Вопрос"
+      :alt="t('examQuestion.questionAlt')"
       silent
     />
 
@@ -72,8 +75,8 @@ defineProps<{
             v-if="opt.is_correct || opt.is_user_choice"
             class="mt-1 flex gap-2 text-micro font-mono uppercase tracking-wider"
           >
-            <span v-if="opt.is_correct" class="text-mark-positive">правильный</span>
-            <span v-if="opt.is_user_choice" class="text-mark-negative">ваш выбор</span>
+            <span v-if="opt.is_correct" class="text-mark-positive">{{ t('examQuestion.correct') }}</span>
+            <span v-if="opt.is_user_choice" class="text-mark-negative">{{ t('examQuestion.userChoice') }}</span>
           </div>
         </div>
       </li>
@@ -86,22 +89,22 @@ defineProps<{
         class="flex items-baseline gap-4 text-[0.78rem] text-muted"
       >
         <span v-if="state.data.difficulty">
-          сложность <span class="text-ink-soft">{{ state.data.difficulty }}</span>
+          {{ t('examQuestion.difficulty') }} <span class="text-ink-soft">{{ state.data.difficulty }}</span>
         </span>
         <span v-if="state.data.score != null">
-          балл
+          {{ t('examQuestion.score') }}
           <span class="font-mono tabular-nums text-ink ml-1">{{ state.data.score }}</span>
         </span>
       </div>
 
       <div v-if="state.data.answer_images.length" class="space-y-3 mt-2">
-        <div class="eyebrow">Ответ</div>
+        <div class="eyebrow">{{ t('examQuestion.answer') }}</div>
         <div class="flex flex-wrap gap-3">
           <UnecImage
             v-for="(img, i) in state.data.answer_images"
             :key="i"
             :src="img"
-            alt="Сканированный ответ"
+            :alt="t('examQuestion.answerAlt')"
             class="max-w-[280px]"
             zoomable
           />
@@ -109,7 +112,7 @@ defineProps<{
       </div>
 
       <div v-if="state.data.comment" class="text-[0.82rem] text-ink-soft italic">
-        <span class="text-muted not-italic">Комментарий:</span> {{ state.data.comment }}
+        <span class="text-muted not-italic">{{ t('examQuestion.comment') }}</span> {{ state.data.comment }}
       </div>
     </template>
 
@@ -117,7 +120,7 @@ defineProps<{
       v-if="state.data.kind === 'unknown'"
       class="text-muted text-[0.82rem]"
     >
-      Не удалось распарсить детали.
+      {{ t('examQuestion.parseFailed') }}
     </div>
   </div>
 </template>

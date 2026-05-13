@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { apiBlob } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import Skeleton from './Skeleton.vue'
 import ImageLightbox from './ImageLightbox.vue'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -59,12 +62,12 @@ async function load(src: string) {
     // apiBlob handles auth + auto-refresh on 401, returns the Blob.
     const blob = await apiBlob('/v1/exams/answer-image', { ftp_path: path })
     if (!blob || blob.size === 0) {
-      throw new Error('пустой ответ')
+      throw new Error(t('unecImage.emptyResponse'))
     }
     blobUrl.value = URL.createObjectURL(blob)
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
-    error.value = err?.status ? `HTTP ${err.status}` : err?.message ?? 'ошибка загрузки'
+    error.value = err?.status ? `HTTP ${err.status}` : err?.message ?? t('unecImage.loadError')
   } finally {
     loading.value = false
   }
@@ -88,7 +91,7 @@ watch(
 onUnmounted(revoke)
 
 function onImgError() {
-  error.value = 'не удалось отобразить'
+  error.value = t('unecImage.renderError')
   revoke()
 }
 </script>
@@ -101,7 +104,7 @@ function onImgError() {
       v-else-if="error"
       class="text-mark-negative text-[0.78rem] py-2 px-3 border border-mark-negative/40 rounded-sm bg-mark-negative/5"
     >
-      Картинка не загрузилась
+      {{ t('unecImage.imageMissing') }}
       <span class="block text-[0.7rem] text-muted mt-0.5">{{ error }}</span>
     </div>
     <img

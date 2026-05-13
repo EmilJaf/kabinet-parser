@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+
+const { t } = useI18n()
 
 type Mode = 'login' | 'register'
 
@@ -17,11 +20,11 @@ const router = useRouter()
 const route = useRoute()
 
 const title = computed(() =>
-  mode.value === 'login' ? 'Войдите в кабинет' : 'Создайте аккаунт',
+  mode.value === 'login' ? t('login.headerLogin') : t('login.headerRegister'),
 )
 
 const submitLabel = computed(() =>
-  mode.value === 'login' ? 'Войти' : 'Создать и войти',
+  mode.value === 'login' ? t('login.submitLogin') : t('login.submitRegister'),
 )
 
 const canSubmit = computed(() => {
@@ -58,9 +61,9 @@ async function submit() {
 function humanizeError(e: unknown): string {
   const err = e as { data?: { detail?: string }; status?: number; message?: string }
   if (err?.data?.detail) return err.data.detail
-  if (err?.status === 401) return 'Неверный email или пароль.'
-  if (err?.status === 409) return 'Этот email уже зарегистрирован.'
-  return err?.message ?? 'Что-то пошло не так. Попробуйте ещё раз.'
+  if (err?.status === 401) return t('login.errInvalid')
+  if (err?.status === 409) return t('login.errTaken')
+  return err?.message ?? t('login.errGeneric')
 }
 </script>
 
@@ -80,7 +83,7 @@ function humanizeError(e: unknown): string {
       <div class="w-full max-w-[460px]">
         <!-- Eyebrow + title -->
         <div class="eyebrow mb-5">
-          {{ mode === 'login' ? 'Вход' : 'Регистрация' }}
+          {{ mode === 'login' ? t('login.tabLogin') : t('login.tabRegister') }}
         </div>
 
         <h1 class="text-display-lg font-medium text-ink leading-[1.15] tracking-tight mb-4">
@@ -88,11 +91,11 @@ function humanizeError(e: unknown): string {
         </h1>
 
         <p class="text-ink-soft leading-relaxed mb-12 max-w-md">
-          Подключитесь к
+          {{ t('login.intro') }}
           <span class="font-mono text-[0.85em] bg-bg-deep px-1.5 py-0.5 rounded-sm">
             kabinet.unec.edu.az
           </span>
-          и получите расписание и оценки в нормальном виде.
+          {{ t('login.introTail') }}
         </p>
 
         <form @submit.prevent="submit" class="space-y-5">
@@ -114,7 +117,7 @@ function humanizeError(e: unknown): string {
           <!-- Password -->
           <div>
             <label class="block text-micro text-muted mb-2 font-mono uppercase tracking-wider">
-              Пароль
+              {{ t('login.passwordLabel') }}
             </label>
             <input
               v-model="password"
@@ -123,14 +126,14 @@ function humanizeError(e: unknown): string {
               required
               minlength="8"
               class="w-full bg-transparent border-0 border-b border-border px-0 py-2 text-ink placeholder-muted-soft focus:outline-none focus:border-ink transition-colors"
-              :placeholder="mode === 'register' ? 'минимум 8 символов' : ''"
+              :placeholder="mode === 'register' ? t('login.passwordPlaceholderRegister') : ''"
             />
           </div>
 
           <!-- Confirm (register only) -->
           <div v-if="mode === 'register'">
             <label class="block text-micro text-muted mb-2 font-mono uppercase tracking-wider">
-              Пароль ещё раз
+              {{ t('login.passwordRepeatLabel') }}
             </label>
             <input
               v-model="passwordConfirm"
@@ -143,7 +146,7 @@ function humanizeError(e: unknown): string {
               v-if="passwordConfirm && password !== passwordConfirm"
               class="text-micro mt-2 text-mark-negative"
             >
-              Пароли не совпадают.
+              {{ t('login.passwordsMismatch') }}
             </p>
           </div>
 
@@ -174,9 +177,9 @@ function humanizeError(e: unknown): string {
               class="text-ink-soft hover:text-ink transition-colors text-[0.9rem] cursor-pointer"
               @click="switchMode('register')"
             >
-              Нет аккаунта?
+              {{ t('login.noAccount') }}
               <span class="underline underline-offset-4 decoration-border">
-                Создайте
+                {{ t('login.createOne') }}
               </span>
             </button>
             <button
@@ -185,15 +188,15 @@ function humanizeError(e: unknown): string {
               class="text-ink-soft hover:text-ink transition-colors text-[0.9rem] cursor-pointer"
               @click="switchMode('login')"
             >
-              Уже есть аккаунт?
-              <span class="underline underline-offset-4 decoration-border">Войдите</span>
+              {{ t('login.haveAccount') }}
+              <span class="underline underline-offset-4 decoration-border">{{ t('login.loginVerb') }}</span>
             </button>
           </div>
         </form>
 
         <!-- Footnote -->
         <div class="hairline-t mt-16 pt-6 flex items-baseline justify-between text-micro text-muted">
-          <span>Пароль UNEC хранится зашифрованным.</span>
+          <span>{{ t('login.passwordSafety') }}</span>
           <span class="font-mono">v0.1</span>
         </div>
       </div>

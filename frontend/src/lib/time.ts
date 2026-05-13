@@ -1,50 +1,59 @@
-const RU_MONTHS_GENITIVE = [
-  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
-]
+// Date/time formatting helpers — locale-aware via vue-i18n catalogs
+// (week-day labels) and Intl.DateTimeFormat (month + numeric formatting).
+import { i18n, currentLocale, type AppLocale } from '@/i18n'
 
-const RU_DAYS_FULL = [
-  'Воскресенье', 'Понедельник', 'Вторник', 'Среда',
-  'Четверг', 'Пятница', 'Суббота',
-]
+function tArr(key: string): string[] {
+  const v = i18n.global.t(key)
+  return Array.isArray(v) ? (v as string[]) : []
+}
 
-const RU_DAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+function tStr(key: string, vars?: Record<string, unknown>): string {
+  return i18n.global.t(key, vars ?? {}) as string
+}
+
+const INTL_TAG: Record<AppLocale, string> = {
+  az: 'az-AZ',
+  ru: 'ru-RU',
+  en: 'en-GB',
+}
+
+function intlTag(): string {
+  return INTL_TAG[currentLocale()]
+}
 
 export function relativeTime(date: Date): string {
   const diff = Date.now() - date.getTime()
   const min = Math.floor(diff / 60_000)
-  if (min < 1) return 'только что'
-  if (min < 60) return `${min} мин назад`
+  if (min < 1) return tStr('time.justNow')
+  if (min < 60) return tStr('time.minAgo', { n: min })
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} ч назад`
+  if (hr < 24) return tStr('time.hAgo', { n: hr })
   const day = Math.floor(hr / 24)
-  if (day < 30) return `${day} дн назад`
-  return date.toLocaleDateString('ru-RU')
+  if (day < 30) return tStr('time.dAgo', { n: day })
+  return date.toLocaleDateString(intlTag())
 }
 
 /**
- * "6 мая" — or "6 мая 2026" if year differs from current.
- *
- *   { withYear: false } → never append year (use when the calling context
- *     already pins the year, e.g. inside a year/semester-filtered view)
- *   { withYear: true }  → always append year
- *   default             → append only when year differs from this year
+ * Locale-aware "6 May" / "6 мая" / "6 may". Appends the year when it
+ * differs from the current one (or always with `withYear: true`,
+ * never with `withYear: false`).
  */
 export function formatDate(date: Date, opts: { withYear?: boolean } = {}): string {
-  const dd = date.getDate()
-  const month = RU_MONTHS_GENITIVE[date.getMonth()]
-  const includeYear =
-    opts.withYear === true ||
-    (opts.withYear !== false && date.getFullYear() !== new Date().getFullYear())
-  if (includeYear) {
-    return `${dd} ${month} ${date.getFullYear()}`
-  }
-  return `${dd} ${month}`
+  const sameYear = date.getFullYear() === new Date().getFullYear()
+  const includeYear = opts.withYear === true || (opts.withYear !== false && !sameYear)
+  return new Intl.DateTimeFormat(intlTag(), {
+    day: 'numeric',
+    month: 'long',
+    ...(includeYear ? { year: 'numeric' } : {}),
+  }).format(date)
 }
 
-/** Russian day name. js dow (0=Sun..6=Sat). */
+/** Day name from JS weekday (0=Sun..6=Sat). `short` returns 2-3 letter form. */
 export function dayName(dow: number, short = false): string {
-  return short ? RU_DAYS_SHORT[dow] : RU_DAYS_FULL[dow]
+  const arr = tArr(short ? 'time.weekDaysShort' : 'time.weekDaysLong')
+  // Catalogs are stored Mon..Sun; convert from JS Sun..Sat.
+  const idx = dow === 0 ? 6 : dow - 1
+  return arr[idx] ?? ''
 }
 
 /** Backend uses ISO weekday (1=Mon..7=Sun). Convert to JS dow (0=Sun..6=Sat). */

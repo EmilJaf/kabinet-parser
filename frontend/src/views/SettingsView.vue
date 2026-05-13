@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/api/client'
 import type { UnecCredentialsStatus } from '@/api/types'
 import PageHeader from '@/components/PageHeader.vue'
@@ -7,15 +8,41 @@ import Skeleton from '@/components/Skeleton.vue'
 import { relativeTime } from '@/lib/time'
 import { usePush } from '@/composables/usePush'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
+import { useAuthStore } from '@/stores/auth'
+import { SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
 
+const { t, locale } = useI18n()
 const push = usePush()
 const theme = useTheme()
+const auth = useAuthStore()
 
-const themeOptions: { value: ThemeMode; label: string; hint: string }[] = [
-  { value: 'light', label: 'Светлая', hint: '☀' },
-  { value: 'dark', label: 'Тёмная', hint: '☾' },
-  { value: 'system', label: 'Системная', hint: '◐' },
-]
+const themeOptions = computed<{ value: ThemeMode; label: string; hint: string }[]>(() => [
+  { value: 'light', label: t('settings.themeLight'), hint: '☀' },
+  { value: 'dark', label: t('settings.themeDark'), hint: '☾' },
+  { value: 'system', label: t('settings.themeSystem'), hint: '◐' },
+])
+
+// Native names of supported locales — kept here instead of in the catalog
+// so each language is shown in *its own* script, not the active UI language.
+const LANG_LABELS: Record<AppLocale, string> = {
+  az: 'Azərbaycan',
+  ru: 'Русский',
+  en: 'English',
+}
+const languageOptions = computed(() =>
+  (SUPPORTED_LOCALES as AppLocale[]).map((l) => ({ value: l, label: LANG_LABELS[l] })),
+)
+const languageSaving = ref(false)
+
+async function setLanguage(lang: AppLocale) {
+  if (lang === locale.value) return
+  languageSaving.value = true
+  try {
+    await auth.setLanguage(lang)
+  } finally {
+    languageSaving.value = false
+  }
+}
 
 const status = ref<UnecCredentialsStatus | null>(null)
 const loading = ref(true)
@@ -29,6 +56,8 @@ const lastLoginRel = computed(() => {
   if (!status.value?.last_login_at) return null
   return relativeTime(new Date(status.value.last_login_at))
 })
+
+const intlTag = computed(() => ({ az: 'az-AZ', ru: 'ru-RU', en: 'en-GB' }[locale.value as AppLocale] ?? 'az-AZ'))
 
 onMounted(async () => {
   await load()
@@ -55,12 +84,12 @@ async function save() {
       body: { username: username.value, password: password.value },
     })
     password.value = ''
-    message.value = { kind: 'ok', text: 'Готово. Логин в кабинет прошёл успешно.' }
+    message.value = { kind: 'ok', text: t('settings.saved') }
   } catch (e: unknown) {
     const err = e as { data?: { detail?: string }; status?: number }
     message.value = {
       kind: 'error',
-      text: err?.data?.detail ?? 'Не удалось сохранить. Проверьте данные.',
+      text: err?.data?.detail ?? t('settings.saveFailed'),
     }
   } finally {
     submitting.value = false
@@ -68,23 +97,23 @@ async function save() {
 }
 
 async function unlink() {
-  if (!confirm('Отвязать аккаунт UNEC? Расписание и оценки больше не будут обновляться.')) return
+  if (!confirm(t('settings.unlinkConfirm'))) return
   await api('/v1/unec/credentials', { method: 'DELETE' })
   status.value = { configured: false, username: null, last_login_at: null, updated_at: null }
   username.value = ''
   password.value = ''
-  message.value = { kind: 'ok', text: 'Аккаунт UNEC отвязан.' }
+  message.value = { kind: 'ok', text: t('settings.unlinked') }
 }
 
 </script>
 
 <template>
   <div>
-    <PageHeader eyebrow="Настройки · 01" title="Аккаунт UNEC">
+    <PageHeader :eyebrow="t('settings.unecEyebrow')" :title="t('settings.unecTitle')">
       <template #below>
         <p class="mt-4 max-w-xl text-ink-soft">
-          Подключите свой кабинет, чтобы Kabinet мог тянуть расписание и оценки от вашего имени.
-          Пароль шифруется и хранится только у нас на сервере.
+          {{ t('settings.unecIntro1') }}
+          {{ t('settings.unecIntro2') }}
         </p>
       </template>
     </PageHeader>
@@ -93,7 +122,7 @@ async function unlink() {
       <!-- Status block -->
       <section class="hairline-t pt-8">
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Статус</span>
+          <span class="eyebrow">{{ t('settings.status') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
@@ -111,34 +140,34 @@ async function unlink() {
         <div v-else-if="status?.configured" class="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-5">
           <div>
             <div class="text-micro text-muted font-mono uppercase tracking-wider mb-1">
-              Состояние
+              {{ t('settings.stateLabel') }}
             </div>
             <div class="flex items-center gap-2.5">
               <span class="h-1.5 w-1.5 rounded-full bg-mark-positive" />
-              <span>Подключено</span>
+              <span>{{ t('settings.connected') }}</span>
             </div>
           </div>
           <div>
             <div class="text-micro text-muted font-mono uppercase tracking-wider mb-1">
-              Логин
+              {{ t('settings.loginLabel') }}
             </div>
             <div class="font-mono">{{ status.username }}</div>
           </div>
           <div v-if="lastLoginRel" class="col-span-2">
             <div class="text-micro text-muted font-mono uppercase tracking-wider mb-1">
-              Последний вход в кабинет
+              {{ t('settings.lastLoginLabel') }}
             </div>
             <div>
               {{ lastLoginRel }}
               <span class="text-muted text-[0.85rem] ml-2 font-mono">
-                {{ new Date(status!.last_login_at!).toLocaleString('ru-RU') }}
+                {{ new Date(status!.last_login_at!).toLocaleString(intlTag) }}
               </span>
             </div>
           </div>
         </div>
 
         <div v-else class="text-ink-soft">
-          Кабинет ещё не подключён.
+          {{ t('settings.notConnected') }}
         </div>
       </section>
 
@@ -146,7 +175,7 @@ async function unlink() {
       <section class="hairline-t mt-12 pt-8">
         <div class="flex items-center gap-3 mb-6">
           <span class="eyebrow">
-            {{ status?.configured ? 'Обновить пароль' : 'Подключить' }}
+            {{ status?.configured ? t('settings.updatePassword') : t('settings.connect') }}
           </span>
           <span class="hairline flex-1 border-t" />
         </div>
@@ -154,21 +183,21 @@ async function unlink() {
         <form @submit.prevent="save" class="space-y-5 max-w-md">
           <div>
             <label class="block text-micro text-muted mb-2 font-mono uppercase tracking-wider">
-              Логин UNEC
+              {{ t('settings.loginField') }}
             </label>
             <input
               v-model="username"
               type="text"
               autocomplete="username"
               required
-              placeholder="например, e.ceferov13"
+              :placeholder="t('settings.loginFieldPlaceholder')"
               class="w-full bg-transparent border-0 border-b border-border px-0 py-2 text-ink placeholder-muted-soft font-mono focus:outline-none focus:border-ink transition-colors"
             />
           </div>
 
           <div>
             <label class="block text-micro text-muted mb-2 font-mono uppercase tracking-wider">
-              Пароль UNEC
+              {{ t('settings.passwordField') }}
             </label>
             <input
               v-model="password"
@@ -178,7 +207,7 @@ async function unlink() {
               class="w-full bg-transparent border-0 border-b border-border px-0 py-2 text-ink focus:outline-none focus:border-ink transition-colors"
             />
             <p class="text-micro mt-2 text-muted">
-              Сохранение проверяется реальным логином в кабинет — если пароль неверный, ничего не запишется.
+              {{ t('settings.saveHint') }}
             </p>
           </div>
 
@@ -198,7 +227,7 @@ async function unlink() {
               :disabled="submitting || !username || !password"
               class="group relative bg-ink text-bg px-6 py-2.5 text-[0.9rem] tracking-tight transition-all hover:bg-ink-soft disabled:bg-muted-soft disabled:cursor-not-allowed cursor-pointer"
             >
-              {{ submitting ? 'Проверяем…' : 'Сохранить' }}
+              {{ submitting ? t('common.saving') : t('common.save') }}
             </button>
 
             <button
@@ -207,7 +236,7 @@ async function unlink() {
               class="text-mark-negative hover:underline text-[0.9rem] cursor-pointer"
               @click="unlink"
             >
-              Отвязать аккаунт
+              {{ t('settings.unlinkButton') }}
             </button>
           </div>
         </form>
@@ -216,15 +245,14 @@ async function unlink() {
       <!-- Appearance -->
       <section class="hairline-t mt-12 pt-8">
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Внешний вид</span>
+          <span class="eyebrow">{{ t('settings.appearance') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
         <div class="max-w-md">
-          <div class="text-[0.95rem] text-ink mb-1.5">Тема</div>
+          <div class="text-[0.95rem] text-ink mb-1.5">{{ t('settings.theme') }}</div>
           <p class="text-micro text-muted mb-4 leading-relaxed">
-            «Системная» — следует настройкам устройства (днём светлая, ночью тёмная,
-            если так настроено в iOS / Android / macOS).
+            {{ t('settings.themeHint') }}
           </p>
           <div class="inline-flex hairline rounded-sm overflow-hidden">
             <button
@@ -244,21 +272,46 @@ async function unlink() {
             </button>
           </div>
         </div>
+
+        <!-- Language -->
+        <div class="max-w-md mt-8">
+          <div class="text-[0.95rem] text-ink mb-1.5">{{ t('settings.language') }}</div>
+          <p class="text-micro text-muted mb-4 leading-relaxed">
+            {{ t('settings.languageHint') }}
+          </p>
+          <div class="inline-flex hairline rounded-sm overflow-hidden">
+            <button
+              v-for="opt in languageOptions"
+              :key="opt.value"
+              type="button"
+              :disabled="languageSaving"
+              class="px-4 py-2 text-[0.85rem] transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
+              :class="
+                locale === opt.value
+                  ? 'bg-ink text-bg'
+                  : 'bg-bg text-ink-soft hover:bg-bg-deep'
+              "
+              @click="setLanguage(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
       </section>
 
       <!-- Push notifications -->
       <section class="hairline-t mt-12 pt-8">
         <div class="flex items-center gap-3 mb-6">
-          <span class="eyebrow">Уведомления</span>
+          <span class="eyebrow">{{ t('settings.notifications') }}</span>
           <span class="hairline flex-1 border-t" />
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-start max-w-md">
           <div>
-            <div class="text-[0.95rem] text-ink">Уведомления о парах</div>
+            <div class="text-[0.95rem] text-ink">{{ t('settings.lessonNotifications') }}</div>
             <p class="text-micro text-muted mt-1.5 leading-relaxed">
-              За 10 минут до начала: предмет, аудитория, кол-во оценок и % пропусков.
-              На iOS работает только в установленном PWA (Поделиться → На экран «Домой»).
+              {{ t('settings.lessonNotifDesc') }}
+              {{ t('settings.iosPwaHint') }}
             </p>
             <p
               v-if="push.error.value"
@@ -270,13 +323,13 @@ async function unlink() {
               v-if="push.state.value === 'denied'"
               class="text-micro text-muted mt-2"
             >
-              Разрешение отклонено. Включите уведомления в настройках браузера.
+              {{ t('settings.permDenied') }}
             </p>
             <p
               v-else-if="push.state.value === 'unsupported'"
               class="text-micro text-muted mt-2"
             >
-              Этот браузер не поддерживает push-уведомления.
+              {{ t('settings.unsupported') }}
             </p>
           </div>
 
@@ -287,7 +340,7 @@ async function unlink() {
             class="text-mark-negative hover:underline text-[0.9rem] cursor-pointer disabled:opacity-50"
             @click="push.disable()"
           >
-            {{ push.busy.value ? '…' : 'Выключить' }}
+            {{ push.busy.value ? '…' : t('settings.disable') }}
           </button>
           <button
             v-else
@@ -296,15 +349,14 @@ async function unlink() {
             class="bg-ink text-bg px-5 py-2 text-[0.9rem] tracking-tight transition-all hover:bg-ink-soft disabled:bg-muted-soft disabled:cursor-not-allowed cursor-pointer"
             @click="push.enable()"
           >
-            {{ push.busy.value ? '…' : 'Включить' }}
+            {{ push.busy.value ? '…' : t('settings.enable') }}
           </button>
         </div>
       </section>
 
       <!-- Trust footer -->
       <section class="hairline-t mt-16 pt-6 text-micro text-muted leading-relaxed">
-        Пароль шифруется симметричным ключом (Fernet) и расшифровывается только в момент,
-        когда нужно обновить сессию с кабинетом. В исходном виде он не хранится и в API не возвращается.
+        {{ t('settings.encryptionFooter') }}
       </section>
     </div>
   </div>

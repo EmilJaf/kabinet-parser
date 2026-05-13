@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { usePwa } from '@/composables/usePwa'
 
+const { t } = useI18n()
 const { canInstall, showIosHint, promptInstall, dismissInstall, needRefresh, applyUpdate } =
   usePwa()
 </script>
@@ -17,12 +19,12 @@ const { canInstall, showIosHint, promptInstall, dismissInstall, needRefresh, app
         K
       </div>
       <div class="min-w-0 flex-1 text-[0.82rem] leading-snug">
-        <div class="font-medium">Установить Kabinet</div>
+        <div class="font-medium">{{ t('pwa.installTitle') }}</div>
         <div v-if="canInstall" class="text-bg/70 mt-0.5">
-          Откроется как обычное приложение
+          {{ t('pwa.installDesc') }}
         </div>
         <div v-else class="text-bg/70 mt-0.5">
-          Поделиться → На экран «Домой»
+          {{ t('pwa.iosShare') }}
         </div>
       </div>
       <button
@@ -30,11 +32,11 @@ const { canInstall, showIosHint, promptInstall, dismissInstall, needRefresh, app
         class="shrink-0 rounded-sm bg-bg px-3 py-1.5 text-[0.78rem] font-medium text-ink hover:bg-bg/90 cursor-pointer"
         @click="promptInstall"
       >
-        Установить
+        {{ t('pwa.install') }}
       </button>
       <button
         class="shrink-0 -mr-1 p-1.5 text-bg/60 hover:text-bg cursor-pointer"
-        aria-label="Скрыть"
+        :aria-label="t('pwa.hide')"
         @click="dismissInstall"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -51,13 +53,13 @@ const { canInstall, showIosHint, promptInstall, dismissInstall, needRefresh, app
       class="fixed inset-x-0 bottom-3 z-50 mx-auto flex max-w-sm items-center gap-3 rounded-md bg-bg-soft px-4 py-3 hairline shadow-lg sm:bottom-5"
     >
       <div class="min-w-0 flex-1 text-[0.82rem] text-ink">
-        Доступна новая версия
+        {{ t('pwa.newVersion') }}
       </div>
       <button
         class="shrink-0 rounded-sm bg-ink px-3 py-1.5 text-[0.78rem] font-medium text-bg hover:bg-ink/90 cursor-pointer"
         @click="applyUpdate"
       >
-        Обновить
+        {{ t('pwa.update') }}
       </button>
     </div>
   </Transition>
