@@ -9,15 +9,17 @@ import Skeleton from '@/components/Skeleton.vue'
 import { relativeTime, shortTime, todayIsoDow } from '@/lib/time'
 import { lessonTypeRu } from '@/lib/locale'
 
-const { t } = useI18n()
+const { t, tm } = useI18n()
 
 const data = ref<ScheduleOut | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref<string | null>(null)
 
-const DAY_LABELS_LONG = computed(() => t('time.weekDaysShort') as unknown as string[])
-const DAY_LABELS_FULL = computed(() => t('time.weekDaysLong') as unknown as string[])
+// vue-i18n v10's t() returns the key when applied to an array message;
+// raw arrays come through tm().
+const DAY_LABELS_LONG = computed(() => tm('time.weekDaysShort') as unknown as string[])
+const DAY_LABELS_FULL = computed(() => tm('time.weekDaysLong') as unknown as string[])
 
 const todayDow = computed(() => todayIsoDow())
 
