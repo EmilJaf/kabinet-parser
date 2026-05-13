@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from ...db.base import get_session_factory
 from ...db.models import Mark, Subject, UnecCredentials
+from ...services import calendar as cal_service
 from ...services import grades as grades_service
 from ...services import push as push_service
 from ...services.unec_session import NoUnecCredentials
@@ -150,9 +151,20 @@ async def _push_new_marks(
 async def sync_all_active_users_grades(ctx: dict) -> dict:
     """ARQ cron: enqueue per-user grades sync for everyone with UNEC creds.
 
-    Mirrors sync_all_active_users for schedule. The per-user job picks the
-    current edu year/semester from UNEC when arguments are omitted.
+    Skipped on weekends and AZ public holidays — teachers don't grade then,
+    so polling UNEC 26 times that day is just noise. The cron schedule
+    already excludes weekends, but holidays falling on weekdays still need
+    this guard.
     """
+    today_local = datetime.now().date()
+    if not cal_service.is_workday(today_local):
+        return {
+            "skipped": True,
+            "reason": "non_workday",
+            "holiday": cal_service.holiday_name_for(today_local),
+            "ts": datetime.now(UTC).isoformat(),
+        }
+
     factory = get_session_factory()
     enqueued = 0
 

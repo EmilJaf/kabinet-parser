@@ -3,11 +3,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from arq import create_pool
+from arq.connections import RedisSettings
+from fastapi import APIRouter, Depends, Request
+from fastapi import status as http_status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...config import get_settings
+from ...core.rate_limit import limiter
 from ...db.models import (
     ExamSyncState,
     GradesSyncState,
@@ -76,3 +81,28 @@ async def status(
         all_synced=all_synced,
         any_pending=any_pending,
     )
+
+
+@router.post("/grades", status_code=http_status.HTTP_202_ACCEPTED)
+@limiter.limit("4/minute")
+async def trigger_grades_sync(
+    request: Request,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Kick a grades sync for the calling user.
+
+    Called by the SPA when the dashboard mounts, so a user who just got a
+    new mark sees it without waiting for the next 30-min cron tick. ARQ's
+    job_id dedup means rapid re-mounts don't pile up jobs — if one is
+    already queued under the same id, the new enqueue is a no-op.
+    """
+    pool = await create_pool(RedisSettings.from_dsn(get_settings().redis_url))
+    try:
+        job = await pool.enqueue_job(
+            "sync_user_grades",
+            str(user.id),
+            _job_id=f"manual-grades:{user.id}",
+        )
+    finally:
+        await pool.close()
+    return {"enqueued": job is not None, "job_id": job.job_id if job else None}

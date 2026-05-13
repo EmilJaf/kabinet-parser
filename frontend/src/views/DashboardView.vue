@@ -9,6 +9,7 @@ import type {
   MarkOut,
   ScheduleOut,
   SubjectOut,
+  SyncStatusOut,
 } from '@/api/types'
 import Skeleton from '@/components/Skeleton.vue'
 import MarkBadge from '@/components/MarkBadge.vue'
@@ -327,6 +328,37 @@ async function fetchOnce() {
   if (results[2].status === 'fulfilled') calendar.value = results[2].value
 }
 
+/** Kick a server-side grades refresh, then poll for completion and reload
+ *  if a new mark landed. Runs once per dashboard visit so a user who just
+ *  got graded sees the change without waiting for the 30-min cron tick.
+ *  Silent on failure — not worth surfacing rate-limit errors to the user. */
+async function refreshGradesInBackground(): Promise<void> {
+  const before = grades.value?.last_synced_at ?? null
+  try {
+    await api('/v1/sync/grades', { method: 'POST' })
+  } catch {
+    return
+  }
+  // Poll up to ~30s. The job typically finishes in 2–10s, but add headroom
+  // in case UNEC is slow.
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 2000))
+    let st: SyncStatusOut | null = null
+    try {
+      st = await api<SyncStatusOut>('/v1/sync/status')
+    } catch {
+      continue
+    }
+    const after = st?.grades.last_synced_at ?? null
+    if (after && after !== before) {
+      // New sync row written — refetch grades + schedule so recent marks
+      // and any updated lessons appear without a manual reload.
+      await fetchOnce()
+      return
+    }
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = null
@@ -344,6 +376,10 @@ async function load() {
     }
   } else {
     loading.value = false
+    // Initial data is already showing — kick a fresh sync in the background
+    // so brand-new marks (posted since the last 30-min cron tick) appear
+    // a few seconds later without needing a manual reload.
+    void refreshGradesInBackground()
   }
 }
 

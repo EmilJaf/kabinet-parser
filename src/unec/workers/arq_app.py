@@ -68,12 +68,15 @@ class WorkerSettings:
             hour=3,
             minute=0,
         ),
-        # Grades / journal — daily at 13:00 and 19:00. Two snapshots per day
-        # so a freshly-posted mark is visible within ~6 hours either way.
+        # Grades / journal — every 30 min during the AZ workday window
+        # (Mon–Fri 08:00–20:30 Baku). Holidays are filtered inside the job.
+        # Catches a freshly-posted mark within ~30 min and the per-user job
+        # diffs and pushes web-push notifications for each new numeric mark.
         cron(
             sync_all_active_users_grades,
-            hour={13, 19},
-            minute=0,
+            weekday={0, 1, 2, 3, 4},
+            hour={8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+            minute={0, 30},
         ),
         # Lesson reminders — daily at 06:00 Baku, schedule deferred jobs for
         # each of today's lessons (start - 10 min). 06:00 is early enough that
