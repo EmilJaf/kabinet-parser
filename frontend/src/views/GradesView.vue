@@ -12,7 +12,7 @@ import { relativeTime, formatDate, parseISODate, todayIsoDow } from '@/lib/time'
 import { gradingFieldRu, lessonTypeRu, pluralize, semesterLabelRu } from '@/lib/locale'
 import { EDU_YEAR_OPTIONS, type UnecOption } from '@/lib/unec'
 
-const { t } = useI18n()
+const { t, tm } = useI18n()
 
 // A grading-detail dict is meaningful only if at least one *value* is non-empty
 // (excluding the student-name row that always appears in the writing tab).
@@ -386,11 +386,11 @@ function statsFor(subject: SubjectOut): SubjectStats {
 }
 
 function pluralizeMarks(n: number): string {
-  return pluralize(n, t('grades.marksPlural') as unknown as [string, string, string])
+  return pluralize(n, tm('grades.marksPlural') as unknown as [string, string, string])
 }
 
 function pluralizeSubjects(n: number): string {
-  return pluralize(n, t('grades.subjectsPlural') as unknown as [string, string, string])
+  return pluralize(n, tm('grades.subjectsPlural') as unknown as [string, string, string])
 }
 
 function formatPercent(n: number): string {

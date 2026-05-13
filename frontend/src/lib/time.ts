@@ -1,24 +1,21 @@
-// Date/time formatting helpers — locale-aware via vue-i18n catalogs
-// (week-day labels) and Intl.DateTimeFormat (month + numeric formatting).
-import { i18n, currentLocale, type AppLocale } from '@/i18n'
+// Date/time formatting helpers — locale-aware via vue-i18n catalogs.
+//
+// We deliberately avoid Intl.DateTimeFormat for month names because some
+// runtime ICU builds (notably mobile Safari with small-icu data) emit
+// fallback skeletons like "M05 14" for less-common locales (az). Sourcing
+// month and weekday names from our own catalog keeps output predictable
+// across every environment the PWA runs in.
+import { i18n } from '@/i18n'
 
-function tArr(key: string): string[] {
-  const v = i18n.global.t(key)
+// vue-i18n v10's `t()` returns a string and serialises array values; raw
+// arrays must be fetched via `tm()`.
+function tmArr(key: string): string[] {
+  const v = i18n.global.tm(key) as unknown
   return Array.isArray(v) ? (v as string[]) : []
 }
 
 function tStr(key: string, vars?: Record<string, unknown>): string {
   return i18n.global.t(key, vars ?? {}) as string
-}
-
-const INTL_TAG: Record<AppLocale, string> = {
-  az: 'az-AZ',
-  ru: 'ru-RU',
-  en: 'en-GB',
-}
-
-function intlTag(): string {
-  return INTL_TAG[currentLocale()]
 }
 
 export function relativeTime(date: Date): string {
@@ -30,27 +27,26 @@ export function relativeTime(date: Date): string {
   if (hr < 24) return tStr('time.hAgo', { n: hr })
   const day = Math.floor(hr / 24)
   if (day < 30) return tStr('time.dAgo', { n: day })
-  return date.toLocaleDateString(intlTag())
+  return formatDate(date, { withYear: true })
 }
 
 /**
- * Locale-aware "6 May" / "6 мая" / "6 may". Appends the year when it
- * differs from the current one (or always with `withYear: true`,
- * never with `withYear: false`).
+ * Locale-aware "6 May" / "6 мая" / "6 may" using the i18n catalog's month
+ * names. Appends the year when it differs from the current one (or always
+ * with `withYear: true`, never with `withYear: false`).
  */
 export function formatDate(date: Date, opts: { withYear?: boolean } = {}): string {
+  const months = tmArr('time.monthsLong')
+  const monthName = months[date.getMonth()] ?? String(date.getMonth() + 1)
   const sameYear = date.getFullYear() === new Date().getFullYear()
   const includeYear = opts.withYear === true || (opts.withYear !== false && !sameYear)
-  return new Intl.DateTimeFormat(intlTag(), {
-    day: 'numeric',
-    month: 'long',
-    ...(includeYear ? { year: 'numeric' } : {}),
-  }).format(date)
+  const base = `${date.getDate()} ${monthName}`
+  return includeYear ? `${base} ${date.getFullYear()}` : base
 }
 
 /** Day name from JS weekday (0=Sun..6=Sat). `short` returns 2-3 letter form. */
 export function dayName(dow: number, short = false): string {
-  const arr = tArr(short ? 'time.weekDaysShort' : 'time.weekDaysLong')
+  const arr = tmArr(short ? 'time.weekDaysShort' : 'time.weekDaysLong')
   // Catalogs are stored Mon..Sun; convert from JS Sun..Sat.
   const idx = dow === 0 ? 6 : dow - 1
   return arr[idx] ?? ''

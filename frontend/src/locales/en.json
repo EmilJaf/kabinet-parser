@@ -43,7 +43,8 @@
     "untilStart": "starts in {duration}",
     "inProgressUntilEnd": "in progress · ends in {duration}",
     "weekDaysShort": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    "weekDaysLong": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    "weekDaysLong": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    "monthsLong": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
   },
   "login": {
     "headerLogin": "Sign in to the cabinet",

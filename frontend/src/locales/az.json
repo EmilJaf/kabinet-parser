@@ -43,7 +43,8 @@
     "untilStart": "başlamağa {duration}",
     "inProgressUntilEnd": "davam edir · sonuna {duration}",
     "weekDaysShort": ["B.e", "Ç.a", "Ç", "C.a", "C", "Ş", "B"],
-    "weekDaysLong": ["Bazar ertəsi", "Çərşənbə axşamı", "Çərşənbə", "Cümə axşamı", "Cümə", "Şənbə", "Bazar"]
+    "weekDaysLong": ["Bazar ertəsi", "Çərşənbə axşamı", "Çərşənbə", "Cümə axşamı", "Cümə", "Şənbə", "Bazar"],
+    "monthsLong": ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avqust", "sentyabr", "oktyabr", "noyabr", "dekabr"]
   },
   "login": {
     "headerLogin": "Kabinetə daxil olun",

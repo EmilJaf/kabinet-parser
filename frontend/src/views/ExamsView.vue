@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 
-const { t } = useI18n()
+const { t, tm } = useI18n()
 import type { ExamOut, ExamQuestionsOut, ExamsOut } from '@/api/types'
 import PageHeader from '@/components/PageHeader.vue'
 import Skeleton from '@/components/Skeleton.vue'
@@ -218,7 +218,7 @@ function gradeColor(letter: string | null): string {
 }
 
 function pluralizeExams(n: number): string {
-  const forms = t('exams.examPlural') as unknown as [string, string, string]
+  const forms = tm('exams.examPlural') as unknown as [string, string, string]
   const m10 = n % 10
   const m100 = n % 100
   if (m10 === 1 && m100 !== 11) return forms[0]

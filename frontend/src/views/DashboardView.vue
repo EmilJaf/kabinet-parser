@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 
-const { t } = useI18n()
+const { t, tm } = useI18n()
 import type {
   CalendarTodayOut,
   GradesOut,
@@ -98,8 +98,8 @@ const upcomingCountdown = computed<string | null>(() => {
 })
 
 function humanMinutes(ms: number): string {
-  const minutesForms = t('time.minutesPlural') as unknown as [string, string, string]
-  const hoursForms = t('time.hoursPlural') as unknown as [string, string, string]
+  const minutesForms = tm('time.minutesPlural') as unknown as [string, string, string]
+  const hoursForms = tm('time.hoursPlural') as unknown as [string, string, string]
   const totalMin = Math.max(0, Math.floor(ms / 60000))
   if (totalMin < 60) return `${totalMin} ${pluralRu(totalMin, minutesForms)}`
   const h = Math.floor(totalMin / 60)
