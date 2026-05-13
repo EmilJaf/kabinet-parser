@@ -21,7 +21,7 @@ function tMaybe(key: string): string | null {
 function tPluralForms(key: string): [string, string, string] | null {
   const v = i18n.global.t(key)
   if (Array.isArray(v) && v.length === 3 && v.every((s) => typeof s === 'string')) {
-    return v as [string, string, string]
+    return v as unknown as [string, string, string]
   }
   return null
 }
