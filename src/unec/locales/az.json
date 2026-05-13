@@ -1,0 +1,39 @@
+{
+  "push": {
+    "lesson_reminder_title": "{minutes} dəqiqədən sonra: {subject}",
+    "morning_brief_title": "Bu gün saat {time}: {subject}",
+    "grades_batch_title": "Jurnal",
+    "grades_batch_body": "{count} yeni qiymət",
+    "grades_one_title": "Jurnal: {subject}",
+    "exams_batch_title": "İmtahanlar",
+    "exams_batch_body": "{count} yeni nəticə",
+    "exam_one_title": "İmtahan: {subject}",
+    "admin_test_title": "Bildiriş yoxlaması",
+    "admin_test_body": "Bunu görürsənsə — push işləyir."
+  },
+  "calendar": {
+    "moved_holiday_suffix": " (köçürülüb)",
+    "rest_day_replaced": "Köçürülmüş istirahət günü",
+    "holiday": {
+      "Yeni il bayramı": "Yeni il bayramı",
+      "Ümumxalq hüzn günü": "Ümumxalq hüzn günü",
+      "Bələdiyyə seçkiləri": "Bələdiyyə seçkiləri",
+      "Qadınlar günü": "Beynəlxalq qadınlar günü",
+      "Novruz bayramı": "Novruz bayramı",
+      "Ramazan bayrami": "Ramazan bayramı",
+      "Qurban bayrami": "Qurban bayramı",
+      "Faşizm üzərində qələbə günü": "Faşizm üzərində qələbə günü",
+      "Müstəqillik Günü": "Müstəqillik günü",
+      "Müstəqillik günü": "Müstəqillik günü",
+      "Respublika günü": "Respublika günü",
+      "Azərbaycan xalqının milli qurtuluş günü": "Azərbaycan xalqının milli qurtuluş günü",
+      "Azərbaycan Respublikasının Silahlı Qüvvələri günü": "Silahlı Qüvvələr günü",
+      "Zəfər Günü": "Zəfər günü",
+      "Azərbaycan Respublikasının Dövlət bayrağı günü": "Dövlət bayrağı günü",
+      "Konstitusiya günü": "Konstitusiya günü",
+      "Milli dirçəliş günü": "Milli dirçəliş günü",
+      "Dünya azərbaycanlıların həmrəyliyi günü": "Dünya azərbaycanlılarının həmrəyliyi günü",
+      "Azərbaycanlıların soyqırımı günü": "Azərbaycanlıların soyqırımı günü"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "push": {
+    "lesson_reminder_title": "In {minutes} minutes: {subject}",
+    "morning_brief_title": "Today at {time}: {subject}",
+    "grades_batch_title": "Journal",
+    "grades_batch_body": "{count} new grades",
+    "grades_one_title": "Journal: {subject}",
+    "exams_batch_title": "Exams",
+    "exams_batch_body": "{count} new results",
+    "exam_one_title": "Exam: {subject}",
+    "admin_test_title": "Push test",
+    "admin_test_body": "If you see this — push is working."
+  },
+  "calendar": {
+    "moved_holiday_suffix": " (observed)",
+    "rest_day_replaced": "Substitute day off",
+    "holiday": {
+      "Yeni il bayramı": "New Year's Day",
+      "Ümumxalq hüzn günü": "National Day of Mourning",
+      "Bələdiyyə seçkiləri": "Municipal Elections",
+      "Qadınlar günü": "International Women's Day",
+      "Novruz bayramı": "Novruz",
+      "Ramazan bayrami": "Ramazan Holiday",
+      "Qurban bayrami": "Gurban Holiday",
+      "Faşizm üzərində qələbə günü": "Victory over Fascism Day",
+      "Müstəqillik Günü": "Independence Day",
+      "Müstəqillik günü": "Independence Day",
+      "Respublika günü": "Republic Day",
+      "Azərbaycan xalqının milli qurtuluş günü": "National Salvation Day",
+      "Azərbaycan Respublikasının Silahlı Qüvvələri günü": "Armed Forces Day",
+      "Zəfər Günü": "Victory Day",
+      "Azərbaycan Respublikasının Dövlət bayrağı günü": "National Flag Day",
+      "Konstitusiya günü": "Constitution Day",
+      "Milli dirçəliş günü": "National Revival Day",
+      "Dünya azərbaycanlıların həmrəyliyi günü": "World Azerbaijanis Solidarity Day",
+      "Azərbaycanlıların soyqırımı günü": "Day of Genocide of Azerbaijanis"
+    }
+  }
+}

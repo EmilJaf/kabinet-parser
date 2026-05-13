@@ -9,7 +9,8 @@ import redis.asyncio as redis
 from sqlalchemy import select
 
 from ...db.base import get_session_factory
-from ...db.models import Mark, Subject, UnecCredentials
+from ...db.models import Mark, Subject, UnecCredentials, User
+from ...i18n import t
 from ...services import calendar as cal_service
 from ...services import grades as grades_service
 from ...services import push as push_service
@@ -109,6 +110,8 @@ async def _push_new_marks(
     if not new_numeric:
         return 0
 
+    user = await db_session.get(User, user_id)
+    lang = user.language if user else None
     sent_count = 0
     try:
         if len(new_numeric) > _MAX_INDIVIDUAL_PUSHES:
@@ -116,8 +119,8 @@ async def _push_new_marks(
                 db_session,
                 user_id=user_id,
                 payload=push_service.PushPayload(
-                    title="Журнал",
-                    body=f"{len(new_numeric)} новых оценок",
+                    title=t("push.grades_batch_title", lang),
+                    body=t("push.grades_batch_body", lang, count=len(new_numeric)),
                     url="/grades",
                     tag="grades-batch",
                 ),
@@ -133,7 +136,7 @@ async def _push_new_marks(
                     db_session,
                     user_id=user_id,
                     payload=push_service.PushPayload(
-                        title=f"Журнал: {subject.name}",
+                        title=t("push.grades_one_title", lang, subject=subject.name),
                         body=body,
                         url="/grades",
                         tag=f"mark:{mark.id}",

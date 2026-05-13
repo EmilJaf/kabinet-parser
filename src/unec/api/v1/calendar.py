@@ -23,7 +23,7 @@ class CalendarTodayOut(BaseModel):
 
 @router.get("/today", response_model=CalendarTodayOut)
 async def today(
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> CalendarTodayOut:
     # Local container TZ is Asia/Baku (set in compose), so datetime.now()
     # gives us the wall-clock date the user actually sees.
@@ -33,6 +33,6 @@ async def today(
         is_workday=cal_service.is_workday(today_local),
         is_weekend=cal_service.is_weekend(today_local),
         is_holiday=cal_service.is_holiday(today_local),
-        holiday_name=cal_service.holiday_name_for(today_local),
+        holiday_name=cal_service.holiday_name_for(today_local, user.language),
         next_workday=cal_service.next_workday(today_local),
     )

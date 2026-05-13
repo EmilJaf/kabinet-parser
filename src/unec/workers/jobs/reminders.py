@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.base import get_session_factory
-from ...db.models import Lesson, PushSubscription
+from ...db.models import Lesson, PushSubscription, User
+from ...i18n import t
 from ...services import calendar as cal_service
 from ...services import push as push_service
 from ...services.lesson_brief import build_lesson_brief
@@ -37,9 +38,16 @@ async def send_lesson_reminder(ctx: dict, user_id: str, lesson_id: str) -> dict:
         lesson = await session.get(Lesson, lesson_uuid)
         if lesson is None:
             return {"status": "skipped", "reason": "lesson_gone"}
+        user = await session.get(User, user_uuid)
+        lang = user.language if user else None
 
         brief = await build_lesson_brief(session, user_id=user_uuid, lesson=lesson)
-        title = f"Через {REMINDER_LEAD_MIN} минут: {brief.subject_name}"
+        title = t(
+            "push.lesson_reminder_title",
+            lang,
+            minutes=REMINDER_LEAD_MIN,
+            subject=brief.subject_name,
+        )
         line2 = " · ".join(filter(None, [brief.room, brief.teacher]))
         line3_parts: list[str] = []
         if brief.mark_count:
@@ -89,7 +97,14 @@ async def send_morning_brief(ctx: dict, user_id: str) -> dict:
         if first_lesson is None or not _lesson_runs_today(first_lesson, today_local):
             return {"status": "skipped", "reason": "no_lessons_today"}
 
-        title = f"Сегодня в {first_lesson.start.strftime('%H:%M')}: {first_lesson.subject}"
+        user = await session.get(User, user_uuid)
+        lang = user.language if user else None
+        title = t(
+            "push.morning_brief_title",
+            lang,
+            time=first_lesson.start.strftime("%H:%M"),
+            subject=first_lesson.subject,
+        )
         body_parts: list[str] = []
         if first_lesson.room:
             body_parts.append(first_lesson.room)

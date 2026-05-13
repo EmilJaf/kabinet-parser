@@ -2,7 +2,9 @@
 
 Powered by the `holidays` package (knows AZ public holidays, including
 movable Islamic dates and the move-to-next-workday rule when a holiday
-falls on a weekend). Names are translated to Russian for the SPA.
+falls on a weekend). Holiday name translations live in src/unec/locales/
+under `calendar.holiday`; the AZ catalog also normalises the source
+labels (typos, case, full official names).
 """
 from __future__ import annotations
 
@@ -11,46 +13,26 @@ from functools import lru_cache
 
 import holidays
 
-# Translate known Azerbaijani holiday names to Russian. Anything not in
-# the map falls back to the source label. Suffixes like " (müşahidə olunur)"
-# (a moved-day marker) are stripped before lookup, then appended back as
-# "(перенос)" so the displayed text stays informative.
-_RU_NAMES: dict[str, str] = {
-    "Yeni il bayramı": "Новый год",
-    "Ümumxalq hüzn günü": "Всенародный день скорби",
-    "Bələdiyyə seçkiləri": "Муниципальные выборы",
-    "Qadınlar günü": "8 марта",
-    "Novruz bayramı": "Новруз байрамы",
-    "Ramazan bayrami": "Праздник Рамазан",
-    "Qurban bayrami": "Праздник Курбан",
-    "Faşizm üzərində qələbə günü": "День Победы над фашизмом",
-    "Müstəqillik Günü": "День независимости",
-    "Müstəqillik günü": "День независимости",
-    "Respublika günü": "День Республики",
-    "Azərbaycan xalqının milli qurtuluş günü": "День национального спасения",
-    "Azərbaycan Respublikasının Silahlı Qüvvələri günü": "День Вооружённых сил",
-    "Zəfər Günü": "День Победы (Карабах)",
-    "Azərbaycan Respublikasının Dövlət bayrağı günü": "День государственного флага",
-    "Konstitusiya günü": "День Конституции",
-    "Milli dirçəliş günü": "День национального возрождения",
-    "Dünya azərbaycanlıların həmrəyliyi günü": "День солидарности азербайджанцев",
-    "Azərbaycanlıların soyqırımı günü": "День геноцида азербайджанцев",
-}
+from ..i18n import get_map, t
 
 _OBSERVED_SUFFIX = " (müşahidə olunur)"
 _REST_DAY_PREFIX = "İstirahət günü"
 
 
-def _translate_one(name: str) -> str:
+def _translate_one(name: str, lang: str | None) -> str:
+    """Translate a single holiday label to `lang`, handling the special
+    "moved holiday" suffixes the `holidays` library tacks onto AZ labels."""
     name = name.strip()
-    # "Day off (replaced by ...)" — synthetic moved holiday.
     if name.startswith(_REST_DAY_PREFIX):
-        return "Выходной (перенос)"
+        return t("calendar.rest_day_replaced", lang)
     observed = name.endswith(_OBSERVED_SUFFIX)
     if observed:
         name = name[: -len(_OBSERVED_SUFFIX)].strip()
-    ru = _RU_NAMES.get(name, name)
-    return f"{ru} (перенос)" if observed else ru
+    catalog = get_map("calendar.holiday", lang)
+    base = catalog.get(name, name)
+    if observed:
+        return base + t("calendar.moved_holiday_suffix", lang)
+    return base
 
 
 @lru_cache(maxsize=8)
@@ -60,15 +42,18 @@ def _calendar_for(year: int) -> holidays.HolidayBase:
     return holidays.country_holidays("AZ", years=year, language="az")
 
 
-def holiday_name_for(d: date) -> str | None:
-    """Russian name of the holiday on `d`, or None if it's not a holiday."""
+def holiday_name_for(d: date, lang: str | None = None) -> str | None:
+    """Localised name of the holiday on `d`, or None if it's not a holiday.
+
+    `lang` defaults to AZ. Multiple holidays on the same day come back
+    comma-separated and each is translated independently.
+    """
     cal = _calendar_for(d.year)
     raw = cal.get(d)
     if raw is None:
         return None
-    # Multiple holidays on the same day come back comma-separated.
     parts = [p.strip() for p in str(raw).split(",")]
-    return ", ".join(_translate_one(p) for p in parts)
+    return ", ".join(_translate_one(p, lang) for p in parts)
 
 
 def is_holiday(d: date) -> bool:

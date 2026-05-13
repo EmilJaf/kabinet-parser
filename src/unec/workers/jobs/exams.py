@@ -7,7 +7,8 @@ import redis.asyncio as redis
 from sqlalchemy import select
 
 from ...db.base import get_session_factory
-from ...db.models import Exam
+from ...db.models import Exam, User
+from ...i18n import t
 from ...services import exams as exams_service
 from ...services import push as push_service
 from ...services.unec_session import NoUnecCredentials
@@ -107,6 +108,8 @@ async def _push_new_results(
     if not new_results:
         return 0
 
+    user = await db_session.get(User, user_id)
+    lang = user.language if user else None
     sent = 0
     try:
         if len(new_results) > _MAX_INDIVIDUAL_PUSHES:
@@ -114,8 +117,8 @@ async def _push_new_results(
                 db_session,
                 user_id=user_id,
                 payload=push_service.PushPayload(
-                    title="Экзамены",
-                    body=f"{len(new_results)} новых результатов",
+                    title=t("push.exams_batch_title", lang),
+                    body=t("push.exams_batch_body", lang, count=len(new_results)),
                     url="/exams",
                     tag="exams-batch",
                 ),
@@ -132,7 +135,7 @@ async def _push_new_results(
                     db_session,
                     user_id=user_id,
                     payload=push_service.PushPayload(
-                        title=f"Экзамен: {exam.subject_name}",
+                        title=t("push.exam_one_title", lang, subject=exam.subject_name),
                         body=" · ".join(grade_bits),
                         url="/exams",
                         tag=f"exam:{exam.id}",

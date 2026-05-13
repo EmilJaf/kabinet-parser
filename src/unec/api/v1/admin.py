@@ -26,6 +26,7 @@ from ...db.models import (
     UnecCredentials,
     User,
 )
+from ...i18n import t
 from ...services import push as push_service
 from ..deps import get_db, require_admin
 
@@ -204,8 +205,8 @@ async def test_push(
             session,
             user_id=user_id,
             payload=push_service.PushPayload(
-                title="Тест уведомлений",
-                body="Если ты это видишь — push работает.",
+                title=t("push.admin_test_title", target.language),
+                body=t("push.admin_test_body", target.language),
                 url="/dashboard",
                 tag="admin-test",
             ),

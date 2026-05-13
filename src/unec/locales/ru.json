@@ -1,0 +1,39 @@
+{
+  "push": {
+    "lesson_reminder_title": "Через {minutes} минут: {subject}",
+    "morning_brief_title": "Сегодня в {time}: {subject}",
+    "grades_batch_title": "Журнал",
+    "grades_batch_body": "{count} новых оценок",
+    "grades_one_title": "Журнал: {subject}",
+    "exams_batch_title": "Экзамены",
+    "exams_batch_body": "{count} новых результатов",
+    "exam_one_title": "Экзамен: {subject}",
+    "admin_test_title": "Тест уведомлений",
+    "admin_test_body": "Если ты это видишь — push работает."
+  },
+  "calendar": {
+    "moved_holiday_suffix": " (перенос)",
+    "rest_day_replaced": "Выходной (перенос)",
+    "holiday": {
+      "Yeni il bayramı": "Новый год",
+      "Ümumxalq hüzn günü": "Всенародный день скорби",
+      "Bələdiyyə seçkiləri": "Муниципальные выборы",
+      "Qadınlar günü": "8 марта",
+      "Novruz bayramı": "Новруз байрамы",
+      "Ramazan bayrami": "Праздник Рамазан",
+      "Qurban bayrami": "Праздник Курбан",
+      "Faşizm üzərində qələbə günü": "День Победы над фашизмом",
+      "Müstəqillik Günü": "День независимости",
+      "Müstəqillik günü": "День независимости",
+      "Respublika günü": "День Республики",
+      "Azərbaycan xalqının milli qurtuluş günü": "День национального спасения",
+      "Azərbaycan Respublikasının Silahlı Qüvvələri günü": "День Вооружённых сил",
+      "Zəfər Günü": "День Победы (Карабах)",
+      "Azərbaycan Respublikasının Dövlət bayrağı günü": "День государственного флага",
+      "Konstitusiya günü": "День Конституции",
+      "Milli dirçəliş günü": "День национального возрождения",
+      "Dünya azərbaycanlıların həmrəyliyi günü": "День солидарности азербайджанцев",
+      "Azərbaycanlıların soyqırımı günü": "День геноцида азербайджанцев"
+    }
+  }
+}
