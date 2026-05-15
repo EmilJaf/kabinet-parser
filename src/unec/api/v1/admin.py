@@ -27,6 +27,7 @@ from ...db.models import (
     User,
 )
 from ...i18n import t
+from ...services import cloudflare as cf_service
 from ...services import push as push_service
 from ..deps import get_db, require_admin
 
@@ -214,6 +215,40 @@ async def test_push(
     except push_service.VapidNotConfigured as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return {"delivered": delivered}
+
+
+class CloudflareStatusOut(BaseModel):
+    cached: bool
+    age_seconds: int | None
+    cookie_prefix: str | None
+    user_agent: str | None
+
+
+@router.get("/cloudflare", response_model=CloudflareStatusOut)
+async def cloudflare_status(request: Request) -> CloudflareStatusOut:
+    """Current state of the shared Cloudflare clearance cookie."""
+    redis_client = request.app.state.redis
+    bundle = await cf_service.load_cached(redis_client)
+    if bundle is None:
+        return CloudflareStatusOut(cached=False, age_seconds=None, cookie_prefix=None, user_agent=None)
+    return CloudflareStatusOut(
+        cached=True,
+        age_seconds=bundle.age_seconds,
+        cookie_prefix=bundle.cookie[:16],
+        user_agent=bundle.user_agent,
+    )
+
+
+@router.post("/cloudflare/refresh", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("6/minute")
+async def cloudflare_refresh(request: Request) -> dict:
+    """Enqueue a Cloudflare clearance refresh in the worker."""
+    pool = await _arq_pool()
+    try:
+        job = await pool.enqueue_job("refresh_cloudflare_clearance", force=True)
+    finally:
+        await pool.close()
+    return {"enqueued": True, "job_id": job.job_id if job else None}
 
 
 @router.get("/logs", response_model=AdminLogsOut)

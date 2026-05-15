@@ -3,6 +3,10 @@ from __future__ import annotations
 import httpx
 from selectolax.parser import HTMLParser
 
+# Fallback UA used when no Cloudflare-derived UA has been injected yet
+# (e.g. tests, first boot before the worker has run a clearance solve).
+# In production every request rides with the UA captured from Playwright
+# so it matches the (UA, IP) pair Cloudflare bound the cf_clearance to.
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
@@ -13,15 +17,44 @@ class AuthError(RuntimeError):
     pass
 
 
+class CloudflareBlocked(RuntimeError):
+    """Raised when Cloudflare interrupts a request with a managed challenge.
+
+    Detection: HTTP 403 + `cf-mitigated: challenge` header. Caller is
+    expected to refresh the shared `cf_clearance` cookie and retry.
+    """
+
+
+def _is_cloudflare_block(resp: httpx.Response) -> bool:
+    if resp.status_code != 403:
+        return False
+    return resp.headers.get("cf-mitigated", "").lower() == "challenge"
+
+
 class UnecClient:
-    def __init__(self, base_url: str = "https://kabinet.unec.edu.az", timeout: float = 30.0):
+    def __init__(
+        self,
+        base_url: str = "https://kabinet.unec.edu.az",
+        timeout: float = 30.0,
+        *,
+        cf_cookie: str | None = None,
+        user_agent: str | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
+        # Pin the User-Agent to whatever Playwright used when solving the
+        # last Cloudflare challenge — cf_clearance is bound to (UA, IP), so
+        # ANY change here invalidates the cookie and triggers a re-challenge.
+        self._user_agent = user_agent or USER_AGENT
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=timeout,
             follow_redirects=True,
-            headers={"User-Agent": USER_AGENT, "Accept-Language": "az,en;q=0.8,ru;q=0.6"},
+            headers={"User-Agent": self._user_agent, "Accept-Language": "az,en;q=0.8,ru;q=0.6"},
         )
+        if cf_cookie:
+            self._client.cookies.set(
+                "cf_clearance", cf_cookie, domain=httpx.URL(self.base_url).host
+            )
 
     async def __aenter__(self) -> "UnecClient":
         return self
@@ -35,6 +68,8 @@ class UnecClient:
     async def login(self, username: str, password: str) -> None:
         # Step 1: GET / to get csrf_token + initial PHPSESSID cookie
         resp = await self._client.get("/")
+        if _is_cloudflare_block(resp):
+            raise CloudflareBlocked("Cloudflare challenge on /")
         resp.raise_for_status()
         csrf = _extract_csrf_token(resp.text)
         if not csrf:
@@ -55,6 +90,8 @@ class UnecClient:
                 "Content-Type": "application/x-www-form-urlencoded",
             },
         )
+        if _is_cloudflare_block(post):
+            raise CloudflareBlocked("Cloudflare challenge on login POST")
         post.raise_for_status()
 
         # If we ended up back on the login form, credentials are wrong.
@@ -84,6 +121,8 @@ class UnecClient:
 
     async def get(self, path: str, params: dict | None = None) -> str:
         resp = await self._client.get(path, params=params)
+        if _is_cloudflare_block(resp):
+            raise CloudflareBlocked(f"Cloudflare challenge on GET {path}")
         resp.raise_for_status()
         if not self.is_authenticated_html(resp.text):
             raise AuthError(f"Session expired or unauthenticated when fetching {path}")
@@ -99,6 +138,8 @@ class UnecClient:
         """
         headers = {"Referer": f"{self.base_url}/az/eresults"}
         resp = await self._client.get(path, params=params, headers=headers)
+        if _is_cloudflare_block(resp):
+            raise CloudflareBlocked(f"Cloudflare challenge on GET {path}")
         resp.raise_for_status()
         return resp.content, resp.headers.get("content-type", "application/octet-stream")
 
@@ -107,6 +148,8 @@ class UnecClient:
         if xhr:
             headers["X-Requested-With"] = "XMLHttpRequest"
         resp = await self._client.post(path, data=data, headers=headers)
+        if _is_cloudflare_block(resp):
+            raise CloudflareBlocked(f"Cloudflare challenge on POST {path}")
         resp.raise_for_status()
         return resp.text
 
@@ -124,6 +167,8 @@ class UnecClient:
             "X-Requested-With": "XMLHttpRequest",
         }
         resp = await self._client.post(path, files=files, headers=headers)
+        if _is_cloudflare_block(resp):
+            raise CloudflareBlocked(f"Cloudflare challenge on POST {path}")
         resp.raise_for_status()
         return resp.text
 
@@ -133,6 +178,8 @@ class UnecClient:
         """Fetch a file. Returns (body, content_type, filename_from_disposition)."""
         headers = {"Referer": referer or f"{self.base_url}/az/files"}
         resp = await self._client.get(path, headers=headers)
+        if _is_cloudflare_block(resp):
+            raise CloudflareBlocked(f"Cloudflare challenge on GET {path}")
         resp.raise_for_status()
         ctype = resp.headers.get("content-type", "application/octet-stream")
         filename: str | None = None

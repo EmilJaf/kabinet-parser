@@ -6,6 +6,7 @@ from arq.cron import cron
 
 from ..config import get_settings
 from ..core.logging_config import setup_logging
+from .jobs.cloudflare import refresh_cloudflare_clearance
 from .jobs.exams import sync_user_exams
 from .jobs.grades import sync_all_active_users_grades, sync_user_grades
 from .jobs.reminders import (
@@ -29,6 +30,11 @@ async def startup(ctx: dict) -> None:
 
     ctx["enqueue_job"] = _enqueue
 
+    # Warm the Cloudflare clearance cache before any sync job runs. force=False
+    # so a still-valid cookie inherited from a previous worker survives the
+    # restart instead of being clobbered.
+    await arq_redis.enqueue_job("refresh_cloudflare_clearance", force=False)
+
 
 async def shutdown(ctx: dict) -> None:
     redis_client: redis.Redis | None = ctx.get("redis_client")
@@ -48,6 +54,7 @@ def _redis_settings() -> RedisSettings:
 class WorkerSettings:
     functions = [
         ping,
+        refresh_cloudflare_clearance,
         sync_user_schedule,
         sync_all_active_users,
         sync_user_grades,
@@ -59,6 +66,15 @@ class WorkerSettings:
         enqueue_morning_briefs,
     ]
     cron_jobs = [
+        # Cloudflare's cf_clearance cookie lives ~60 min. We refresh on a
+        # cron that fires at :00 and :45 of every hour — so the longest gap
+        # between two refreshes is 45 min, still comfortably inside the 60-min
+        # cookie lifetime. All users share the same cookie (CF binds to
+        # source IP + UA), so one job suffices for the whole server.
+        cron(
+            refresh_cloudflare_clearance,
+            minute={0, 45},
+        ),
         # Schedule changes ~once a semester. Sync on the 1st of Jan/Apr/Jul/Oct
         # at 03:00 — quarterly cadence, well before students wake up.
         cron(

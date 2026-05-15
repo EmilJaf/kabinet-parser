@@ -31,6 +31,13 @@ dependencies = [
     # Country-aware holiday calendar (Azerbaijan), with rules for moved
     # weekends and movable Islamic dates.
     "holidays>=0.55",
+    # Headless Chromium for solving Cloudflare's Managed Challenge in front
+    # of kabinet.unec.edu.az. The worker spawns it periodically, harvests
+    # the cf_clearance cookie, and parks it in Redis so the existing httpx
+    # client can ride along. Stealth tweaks (navigator.webdriver, plugin
+    # list, etc.) are applied inline via context.add_init_script — no
+    # external stealth package, fewer moving parts.
+    "playwright>=1.50",
     # Settings + CLI
     "pydantic>=2.7",
     "pydantic-settings>=2.3",

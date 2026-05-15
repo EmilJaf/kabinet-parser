@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..scraper.client import AuthError as UnecAuthError
-from ..scraper.client import UnecClient
+from ..scraper.client import CloudflareBlocked, UnecClient
+from . import cloudflare as cf_service
 from . import unec_credentials as creds_service
 
 
@@ -66,6 +67,27 @@ class UnecSessionManager:
     async def invalidate(self, user_id: uuid.UUID) -> None:
         await self._redis.delete(_session_key(user_id))
 
+    async def _do_login_with_cf_retry(
+        self, username: str, password: str, base_url: str
+    ) -> dict[str, str]:
+        """Run the UNEC login flow, refreshing the shared cf_clearance once on
+        a Cloudflare challenge mid-flight."""
+        for attempt in range(2):
+            bundle = await cf_service.get_clearance(self._redis, force=attempt == 1)
+            async with UnecClient(
+                base_url=base_url,
+                cf_cookie=bundle.cookie,
+                user_agent=bundle.user_agent,
+            ) as client:
+                try:
+                    await client.login(username, password)
+                except CloudflareBlocked:
+                    if attempt == 1:
+                        raise
+                    continue
+                return client.dump_cookies()
+        raise RuntimeError("unreachable")
+
     async def _login_and_cache(
         self, user_id: uuid.UUID, db_session: AsyncSession
     ) -> dict[str, str]:
@@ -75,9 +97,7 @@ class UnecSessionManager:
         username, password = creds
 
         settings = get_settings()
-        async with UnecClient(base_url=settings.unec_base_url) as client:
-            await client.login(username, password)  # raises UnecAuthError on bad creds
-            cookies = client.dump_cookies()
+        cookies = await self._do_login_with_cf_retry(username, password, settings.unec_base_url)
 
         await self._save_cookies(user_id, cookies)
 
@@ -142,11 +162,19 @@ class UnecSessionManager:
         """
         cookies, _ = await self._ensure_cookies(user_id, db_session)
         settings = get_settings()
-        async with UnecClient(base_url=settings.unec_base_url) as client:
-            client.set_cookies(cookies)
+        bundle = await cf_service.get_clearance(self._redis)
+        async with UnecClient(
+            base_url=settings.unec_base_url,
+            cf_cookie=bundle.cookie,
+            user_agent=bundle.user_agent,
+        ) as client:
+            client.set_cookies({**cookies, "cf_clearance": bundle.cookie})
             yield client
             # Persist any updated cookies (UNEC may rotate PHPSESSID).
-            await self._save_cookies(user_id, client.dump_cookies())
+            # cf_clearance is shared in Redis, so strip it from per-user cache.
+            jar = client.dump_cookies()
+            jar.pop("cf_clearance", None)
+            await self._save_cookies(user_id, jar)
 
     async def fetch(
         self,
@@ -154,26 +182,43 @@ class UnecSessionManager:
         db_session: AsyncSession,
         fetcher: Callable[[UnecClient], Awaitable[T]],
     ) -> T:
-        """Run ``fetcher(client)`` with auto-retry on session expiry.
+        """Run ``fetcher(client)`` with auto-retry on session/Cloudflare expiry.
 
-        First attempt uses the cached session; if that raises ``UnecAuthError``
-        we drop the cache, login again, and retry once. The second failure
-        propagates.
+        Three failure shapes are handled:
+        - ``UnecAuthError``: PHPSESSID expired → drop the per-user cache, log
+          back in, retry once.
+        - ``CloudflareBlocked``: shared cf_clearance is dead → force-refresh
+          via Playwright, retry once.
+        - Anything else: propagate.
         """
+        settings = get_settings()
         for attempt in range(2):
-            force = attempt == 1
-            cookies, _ = await self._ensure_cookies(user_id, db_session, force=force)
-            settings = get_settings()
-            async with UnecClient(base_url=settings.unec_base_url) as client:
-                client.set_cookies(cookies)
+            force_user = attempt == 1
+            cookies, _ = await self._ensure_cookies(user_id, db_session, force=force_user)
+            bundle = await cf_service.get_clearance(self._redis, force=False)
+            async with UnecClient(
+                base_url=settings.unec_base_url,
+                cf_cookie=bundle.cookie,
+                user_agent=bundle.user_agent,
+            ) as client:
+                client.set_cookies({**cookies, "cf_clearance": bundle.cookie})
                 try:
                     result = await fetcher(client)
+                except CloudflareBlocked:
+                    # Shared clearance is stale. Refresh it and retry with the
+                    # SAME per-user PHPSESSID (no need to re-login UNEC).
+                    await cf_service.get_clearance(self._redis, force=True)
+                    if attempt == 1:
+                        raise
+                    continue
                 except UnecAuthError:
                     await self.invalidate(user_id)
                     if attempt == 1:
                         raise
                     continue
-                await self._save_cookies(user_id, client.dump_cookies())
+                jar = client.dump_cookies()
+                jar.pop("cf_clearance", None)
+                await self._save_cookies(user_id, jar)
                 return result
         # Unreachable — the loop either returns or re-raises.
         raise RuntimeError("unreachable")
