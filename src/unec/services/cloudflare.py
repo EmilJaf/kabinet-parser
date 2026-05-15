@@ -202,36 +202,10 @@ async def _wait_for_cache(redis_client: redis.Redis) -> ClearanceBundle:
     )
 
 
-# Minimal stealth init script. Cloudflare's Managed Challenge sniffs these
-# values; setting them to "real Chrome" defaults gets us past the obvious
-# automation tells. Heavier patches (WebGL vendor spoof, audio fingerprint)
-# aren't needed in practice — they're what stealth libraries add, but for
-# a residential-traffic-volume bypass like ours, this minimum is enough.
-_STEALTH_SCRIPT = """
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-Object.defineProperty(navigator, 'plugins', {
-  get: () => [
-    { name: 'PDF Viewer' },
-    { name: 'Chrome PDF Viewer' },
-    { name: 'Chromium PDF Viewer' },
-  ],
-});
-Object.defineProperty(navigator, 'languages', { get: () => ['az-AZ', 'az', 'en-US', 'en'] });
-window.chrome = window.chrome || { runtime: {} };
-const origQuery = window.navigator.permissions && window.navigator.permissions.query;
-if (origQuery) {
-  window.navigator.permissions.query = (parameters) =>
-    parameters && parameters.name === 'notifications'
-      ? Promise.resolve({ state: Notification.permission })
-      : origQuery(parameters);
-}
-"""
-
-
 async def _solve_in_browser() -> ClearanceBundle:
     """Spawn Chromium, navigate to the cabinet, scrape cf_clearance.
 
-    Imports playwright lazily so the rest of the app still boots in
+    Imports patchright lazily so the rest of the app still boots in
     environments where Chromium isn't installed (e.g. unit tests on CI).
 
     Each Playwright step is wrapped in asyncio.wait_for: in our first prod
@@ -239,7 +213,10 @@ async def _solve_in_browser() -> ClearanceBundle:
     request down with it. Per-step timeouts surface the hang point in
     logs immediately and let the lock release on schedule.
     """
-    from playwright.async_api import async_playwright
+    # patchright exposes the same async_api as upstream playwright — only
+    # the import path differs. The patched Chromium binary is what makes
+    # this version pass CF's CDP-detection step.
+    from patchright.async_api import async_playwright
 
     settings = get_settings()
     target_url = settings.unec_base_url.rstrip("/") + "/"
@@ -261,12 +238,16 @@ async def _solve_in_browser() -> ClearanceBundle:
         )
         logger.info("cloudflare: chromium launched")
         try:
+            # patchright's docs explicitly recommend NOT calling
+            # context.add_init_script — JS-level patches mutate the runtime
+            # in CDP-detectable ways and have been a tell on managed
+            # challenge since late 2024. The patched Chromium itself
+            # already handles navigator.webdriver, plugins, etc.
             context = await browser.new_context(
-                viewport={"width": 1366, "height": 768},
                 locale="az-AZ",
                 timezone_id="Asia/Baku",
+                no_viewport=True,
             )
-            await context.add_init_script(_STEALTH_SCRIPT)
             page = await context.new_page()
             logger.info("cloudflare: navigating")
 

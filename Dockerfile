@@ -20,11 +20,12 @@ COPY alembic/ ./alembic/
 COPY alembic.ini ./
 RUN pip install -e .
 
-# Install headless Chromium + the OS libs Playwright needs. Cloudflare's
-# Managed Challenge in front of kabinet.unec.edu.az can only be solved by
-# executing the JS, so the worker spawns this Chromium periodically to
-# harvest a fresh cf_clearance cookie. Image grows ~400 MB.
-RUN python -m playwright install --with-deps chromium \
+# Install patchright's CDP-fingerprint-patched Chromium plus the OS libs
+# it needs. patchright ships its own Chromium build that hides the
+# DevTools-Protocol runtime CF uses to detect automated browsers — stock
+# Playwright Chromium gets stuck in an infinite challenge loop on
+# kabinet.unec.edu.az. Image grows ~450 MB.
+RUN python -m patchright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

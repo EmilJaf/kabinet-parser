@@ -32,12 +32,12 @@ dependencies = [
     # weekends and movable Islamic dates.
     "holidays>=0.55",
     # Headless Chromium for solving Cloudflare's Managed Challenge in front
-    # of kabinet.unec.edu.az. The worker spawns it periodically, harvests
-    # the cf_clearance cookie, and parks it in Redis so the existing httpx
-    # client can ride along. Stealth tweaks (navigator.webdriver, plugin
-    # list, etc.) are applied inline via context.add_init_script — no
-    # external stealth package, fewer moving parts.
-    "playwright>=1.50",
+    # of kabinet.unec.edu.az. We use patchright, a Playwright fork whose
+    # Chromium binary is patched to hide the Chrome DevTools Protocol
+    # fingerprint — stock Playwright triggers the challenge to loop
+    # indefinitely because CF detects the CDP runtime even with stealthy
+    # JS patches. API is identical to playwright, just a different import.
+    "patchright>=1.50",
     # Settings + CLI
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
