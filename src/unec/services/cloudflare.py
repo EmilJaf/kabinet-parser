@@ -1,13 +1,13 @@
-"""Cloudflare Managed Challenge bypass via headless Chromium.
+"""Cloudflare Managed Challenge bypass via headless antidetect browser.
 
 `kabinet.unec.edu.az` sits behind Cloudflare's Managed Challenge — a 403
 page that runs JS to fingerprint the client, then issues a `cf_clearance`
 cookie once the challenge passes. Plain HTTP clients (httpx, curl) can't
 execute that JS, so they get a permanent 403.
 
-This service runs Playwright with a stealth-patched Chromium periodically,
-lets the challenge solve itself in-browser, scrapes `cf_clearance` +
-the exact User-Agent Chromium used, and parks them in Redis. The existing
+We run Camoufox (an antidetect Firefox fork) periodically, let the
+challenge solve itself in-browser, scrape `cf_clearance` + the exact
+User-Agent Camoufox used, and park them in Redis. The existing
 `UnecClient` (httpx) then attaches both to every request alongside the
 per-user `PHPSESSID` / `SERVERID`. Cloudflare binds the cookie to (source
 IP, UA), so one harvested cookie serves every user behind this server.
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # to source IP + UA, and the whole app shares one outbound IP, so one cookie
 # is correct for every user.
 _CACHE_KEY = "unec:cf_clearance"
-# Lock to avoid two parallel Chromium spawns when several callers notice
+# Lock to avoid two parallel browser spawns when several callers notice
 # a stale cache at the same time. 60s comfortably covers a worst-case
 # solve (launch 15 + nav 15 + challenge 20 + slack).
 _LOCK_KEY = "unec:cf_clearance:lock"
@@ -47,18 +47,18 @@ _LOCK_TTL_SECONDS = 60
 # bias toward refreshing slightly early so we never serve a freshly-expired
 # cookie on a real user request.
 _CACHE_TTL_SECONDS = 50 * 60
-# Per-step timeouts. Wrapped via asyncio.wait_for around each Playwright
-# call — our first prod deploy hung silently inside Playwright and dragged
+# Per-step timeouts. Wrapped via asyncio.wait_for around each browser
+# call — our first prod deploy hung silently inside the browser and dragged
 # every concurrent request down with it. Per-step timeouts make the hang
 # point visible in logs and let the Redis lock be released on schedule.
-_LAUNCH_TIMEOUT_SECONDS = 15
+_LAUNCH_TIMEOUT_SECONDS = 25
 _NAV_TIMEOUT_SECONDS = 15
-_CHALLENGE_TIMEOUT_SECONDS = 20
+_CHALLENGE_TIMEOUT_SECONDS = 25
 # Loser-wait deadline: how long a caller polls the cache while another
 # refresh is in flight. Comfortably less than the lock TTL so that, if
 # the lock disappears before this deadline, we can detect a failed solve
 # explicitly instead of waiting the full TTL.
-_LOSER_WAIT_SECONDS = 50
+_LOSER_WAIT_SECONDS = 55
 
 
 class CloudflareError(RuntimeError):
@@ -129,12 +129,12 @@ async def _release_lock(redis_client: redis.Redis, token: str) -> None:
 async def get_clearance(
     redis_client: redis.Redis, *, force: bool = False
 ) -> ClearanceBundle:
-    """Return a fresh clearance bundle, refreshing via Chromium if needed.
+    """Return a fresh clearance bundle, refreshing via Camoufox if needed.
 
     - `force=False`: return cached if present, otherwise refresh.
     - `force=True`: drop the cache and refresh.
 
-    Concurrent callers share a single Chromium spawn: the first arrival
+    Concurrent callers share a single browser spawn: the first arrival
     holds a Redis lock and refreshes; the rest poll for the cache to fill.
     """
     if force:
@@ -144,7 +144,7 @@ async def get_clearance(
     if cached is not None:
         return cached
 
-    # No cache — race to refresh. Winner runs Chromium, losers poll.
+    # No cache — race to refresh. Winner runs the browser, losers poll.
     token = await _acquire_lock(redis_client)
     if token is None:
         return await _wait_for_cache(redis_client)
@@ -203,92 +203,74 @@ async def _wait_for_cache(redis_client: redis.Redis) -> ClearanceBundle:
 
 
 async def _solve_in_browser() -> ClearanceBundle:
-    """Spawn Chromium, navigate to the cabinet, scrape cf_clearance.
+    """Spawn Camoufox (antidetect Firefox), navigate to the cabinet,
+    scrape cf_clearance.
 
-    Imports patchright lazily so the rest of the app still boots in
-    environments where Chromium isn't installed (e.g. unit tests on CI).
+    Camoufox imported lazily so the rest of the app still boots in
+    environments where its Firefox binary isn't installed (unit tests).
 
-    Each Playwright step is wrapped in asyncio.wait_for: in our first prod
-    deploy the entire solve hung silently and dragged every concurrent
-    request down with it. Per-step timeouts surface the hang point in
-    logs immediately and let the lock release on schedule.
+    Each navigation step is wrapped in asyncio.wait_for so a hang at any
+    step surfaces in logs at the exact step and the Redis lock can be
+    released on schedule.
     """
-    # patchright exposes the same async_api as upstream playwright — only
-    # the import path differs. The patched Chromium binary is what makes
-    # this version pass CF's CDP-detection step.
-    from patchright.async_api import async_playwright
+    # AsyncCamoufox yields a Playwright Browser instance — once we have
+    # `browser` it's standard Playwright API. The antidetect work is done
+    # at browser-construction time: custom Firefox build plus runtime
+    # spoofing of canvas / WebGL / fonts / audio fingerprints injected
+    # before any site script runs.
+    from camoufox.async_api import AsyncCamoufox
 
     settings = get_settings()
     target_url = settings.unec_base_url.rstrip("/") + "/"
 
     logger.info("cloudflare: solve start (target=%s)", target_url)
-    async with async_playwright() as pw:
-        logger.info("cloudflare: playwright driver ready")
-        browser = await asyncio.wait_for(
-            pw.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                ],
+    async with AsyncCamoufox(
+        headless=True,
+        # geoip=True auto-sets locale/timezone from the outgoing IP so the
+        # browser fingerprint matches what Cloudflare sees at the TCP
+        # layer. Claiming Asia/Baku from a Hetzner DE IP would be an
+        # obvious lie; matching the IP region keeps CF scoring honest.
+        geoip=True,
+        humanize=True,
+    ) as browser:
+        logger.info("cloudflare: camoufox browser ready")
+        page = await browser.new_page()
+        logger.info("cloudflare: navigating")
+
+        await asyncio.wait_for(
+            page.goto(
+                target_url,
+                wait_until="domcontentloaded",
+                timeout=_NAV_TIMEOUT_SECONDS * 1000,
             ),
-            timeout=_LAUNCH_TIMEOUT_SECONDS,
+            timeout=_NAV_TIMEOUT_SECONDS + 5,
         )
-        logger.info("cloudflare: chromium launched")
-        try:
-            # patchright's docs explicitly recommend NOT calling
-            # context.add_init_script — JS-level patches mutate the runtime
-            # in CDP-detectable ways and have been a tell on managed
-            # challenge since late 2024. The patched Chromium itself
-            # already handles navigator.webdriver, plugins, etc.
-            context = await browser.new_context(
-                locale="az-AZ",
-                timezone_id="Asia/Baku",
-                no_viewport=True,
-            )
-            page = await context.new_page()
-            logger.info("cloudflare: navigating")
+        logger.info("cloudflare: initial nav done (title=%r)", await page.title())
 
-            await asyncio.wait_for(
-                page.goto(
-                    target_url,
-                    wait_until="domcontentloaded",
-                    timeout=_NAV_TIMEOUT_SECONDS * 1000,
-                ),
-                timeout=_NAV_TIMEOUT_SECONDS + 5,
-            )
-            logger.info("cloudflare: initial nav done (title=%r)", await page.title())
+        context = page.context
+        await asyncio.wait_for(
+            _wait_for_clearance(context, page),
+            timeout=_CHALLENGE_TIMEOUT_SECONDS,
+        )
 
-            await asyncio.wait_for(
-                _wait_for_clearance(context, page),
-                timeout=_CHALLENGE_TIMEOUT_SECONDS,
+        cookies = await context.cookies(target_url)
+        cf_value: str | None = None
+        for c in cookies:
+            if c.get("name") == "cf_clearance":
+                cf_value = c.get("value")
+                break
+        if not cf_value:
+            raise CloudflareError(
+                "Challenge appeared to pass but no cf_clearance cookie was set"
             )
 
-            cookies = await context.cookies(target_url)
-            cf_value: str | None = None
-            for c in cookies:
-                if c.get("name") == "cf_clearance":
-                    cf_value = c.get("value")
-                    break
-            if not cf_value:
-                raise CloudflareError(
-                    "Challenge appeared to pass but no cf_clearance cookie was set"
-                )
-
-            ua = await page.evaluate("() => navigator.userAgent")
-            logger.info("cloudflare: solve done")
-            return ClearanceBundle(
-                cookie=str(cf_value),
-                user_agent=str(ua),
-                fetched_at=time.time(),
-            )
-        finally:
-            try:
-                await asyncio.wait_for(browser.close(), timeout=5)
-            except Exception:
-                logger.warning("cloudflare: browser close hung; abandoning")
+        ua = await page.evaluate("() => navigator.userAgent")
+        logger.info("cloudflare: solve done")
+        return ClearanceBundle(
+            cookie=str(cf_value),
+            user_agent=str(ua),
+            fetched_at=time.time(),
+        )
 
 
 async def _wait_for_clearance(context, page) -> None:

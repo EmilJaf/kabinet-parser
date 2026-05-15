@@ -31,13 +31,14 @@ dependencies = [
     # Country-aware holiday calendar (Azerbaijan), with rules for moved
     # weekends and movable Islamic dates.
     "holidays>=0.55",
-    # Headless Chromium for solving Cloudflare's Managed Challenge in front
-    # of kabinet.unec.edu.az. We use patchright, a Playwright fork whose
-    # Chromium binary is patched to hide the Chrome DevTools Protocol
-    # fingerprint — stock Playwright triggers the challenge to loop
-    # indefinitely because CF detects the CDP runtime even with stealthy
-    # JS patches. API is identical to playwright, just a different import.
-    "patchright>=1.50",
+    # Camoufox — Firefox-based antidetect browser, used to solve Cloudflare's
+    # Managed Challenge in front of kabinet.unec.edu.az. We tried stock
+    # Playwright (CDP-detected → infinite challenge) and patchright
+    # (CDP-patched but still rejected — CF was holding us in challenge by
+    # IP reputation / headless rendering tells). Camoufox uses Firefox
+    # (different fingerprint surface than Chromium) plus heavy under-the-
+    # hood spoofing of canvas, WebGL, fonts, audio. Playwright API.
+    "camoufox[geoip]>=0.4",
     # Settings + CLI
     "pydantic>=2.7",
     "pydantic-settings>=2.3",

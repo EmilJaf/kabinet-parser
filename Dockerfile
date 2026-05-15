@@ -20,12 +20,12 @@ COPY alembic/ ./alembic/
 COPY alembic.ini ./
 RUN pip install -e .
 
-# Install patchright's CDP-fingerprint-patched Chromium plus the OS libs
-# it needs. patchright ships its own Chromium build that hides the
-# DevTools-Protocol runtime CF uses to detect automated browsers — stock
-# Playwright Chromium gets stuck in an infinite challenge loop on
-# kabinet.unec.edu.az. Image grows ~450 MB.
-RUN python -m patchright install --with-deps chromium \
+# Camoufox ships its own antidetect Firefox build. We use Playwright's
+# install-deps to grab the Firefox OS libraries (libgtk, libdbus-glib,
+# etc.) without downloading Playwright's stock Firefox, then `camoufox
+# fetch` downloads the patched build. Image grows ~500 MB.
+RUN python -m playwright install-deps firefox \
+    && python -m camoufox fetch \
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
