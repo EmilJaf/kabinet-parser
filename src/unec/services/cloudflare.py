@@ -39,17 +39,26 @@ logger = logging.getLogger(__name__)
 # is correct for every user.
 _CACHE_KEY = "unec:cf_clearance"
 # Lock to avoid two parallel Chromium spawns when several callers notice
-# a stale cache at the same time. 60s is well over a normal refresh.
+# a stale cache at the same time. 60s comfortably covers a worst-case
+# solve (launch 15 + nav 15 + challenge 20 + slack).
 _LOCK_KEY = "unec:cf_clearance:lock"
 _LOCK_TTL_SECONDS = 60
 # Stored 50 min — Cloudflare's `cf_clearance` typically lives 60 min. We
 # bias toward refreshing slightly early so we never serve a freshly-expired
 # cookie on a real user request.
 _CACHE_TTL_SECONDS = 50 * 60
-# Hard ceiling on how long a single challenge solve may take. The actual
-# challenge resolves in 3–8 seconds; the long tail is network jitter +
-# Chromium cold-start.
-_SOLVE_TIMEOUT_SECONDS = 45
+# Per-step timeouts. Wrapped via asyncio.wait_for around each Playwright
+# call — our first prod deploy hung silently inside Playwright and dragged
+# every concurrent request down with it. Per-step timeouts make the hang
+# point visible in logs and let the Redis lock be released on schedule.
+_LAUNCH_TIMEOUT_SECONDS = 15
+_NAV_TIMEOUT_SECONDS = 15
+_CHALLENGE_TIMEOUT_SECONDS = 20
+# Loser-wait deadline: how long a caller polls the cache while another
+# refresh is in flight. Comfortably less than the lock TTL so that, if
+# the lock disappears before this deadline, we can detect a failed solve
+# explicitly instead of waiting the full TTL.
+_LOSER_WAIT_SECONDS = 50
 
 
 class CloudflareError(RuntimeError):
@@ -162,13 +171,32 @@ async def get_clearance(
 
 
 async def _wait_for_cache(redis_client: redis.Redis) -> ClearanceBundle:
-    """Poll the cache while another worker refreshes. Bounded by the lock TTL."""
-    deadline = time.monotonic() + _LOCK_TTL_SECONDS + 5
+    """Poll the cache while another worker refreshes.
+
+    Two exit conditions for failure:
+    - The deadline expires (winner is taking too long or genuinely hung).
+    - The lock disappears but the cache is still empty (winner gave up).
+
+    The second case is the important one — previously losers waited the
+    full deadline even after the winner had already failed.
+    """
+    deadline = time.monotonic() + _LOSER_WAIT_SECONDS
     while time.monotonic() < deadline:
         cached = await load_cached(redis_client)
         if cached is not None:
             return cached
-        await asyncio.sleep(0.5)
+        # Solver order is: store(bundle) → release(lock). If the lock is
+        # gone we'd expect the cache to be filled within a few ms; if not,
+        # the solver crashed without publishing.
+        if not await redis_client.exists(_LOCK_KEY):
+            await asyncio.sleep(0.3)
+            cached = await load_cached(redis_client)
+            if cached is not None:
+                return cached
+            raise CloudflareClearanceUnavailable(
+                "Cloudflare solver finished without publishing a clearance cookie"
+            )
+        await asyncio.sleep(0.4)
     raise CloudflareClearanceUnavailable(
         "Timed out waiting for parallel Cloudflare refresh"
     )
@@ -205,39 +233,57 @@ async def _solve_in_browser() -> ClearanceBundle:
 
     Imports playwright lazily so the rest of the app still boots in
     environments where Chromium isn't installed (e.g. unit tests on CI).
+
+    Each Playwright step is wrapped in asyncio.wait_for: in our first prod
+    deploy the entire solve hung silently and dragged every concurrent
+    request down with it. Per-step timeouts surface the hang point in
+    logs immediately and let the lock release on schedule.
     """
     from playwright.async_api import async_playwright
 
     settings = get_settings()
     target_url = settings.unec_base_url.rstrip("/") + "/"
 
+    logger.info("cloudflare: solve start (target=%s)", target_url)
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            headless=True,
-            args=[
-                # Reduces detection surface — these flags strip the
-                # "automation banner" signals that headless Chrome leaks.
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ],
+        logger.info("cloudflare: playwright driver ready")
+        browser = await asyncio.wait_for(
+            pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                ],
+            ),
+            timeout=_LAUNCH_TIMEOUT_SECONDS,
         )
+        logger.info("cloudflare: chromium launched")
         try:
             context = await browser.new_context(
                 viewport={"width": 1366, "height": 768},
                 locale="az-AZ",
                 timezone_id="Asia/Baku",
             )
-            # Inject stealth patches before any page script runs.
             await context.add_init_script(_STEALTH_SCRIPT)
             page = await context.new_page()
+            logger.info("cloudflare: navigating")
 
-            await page.goto(target_url, wait_until="domcontentloaded", timeout=_SOLVE_TIMEOUT_SECONDS * 1000)
+            await asyncio.wait_for(
+                page.goto(
+                    target_url,
+                    wait_until="domcontentloaded",
+                    timeout=_NAV_TIMEOUT_SECONDS * 1000,
+                ),
+                timeout=_NAV_TIMEOUT_SECONDS + 5,
+            )
+            logger.info("cloudflare: initial nav done (title=%r)", await page.title())
 
-            # The challenge replaces the document once solved. Wait until
-            # either cf_clearance shows up in cookies (canonical signal) or
-            # the page title stops being "Just a moment..." (visual signal).
-            await _wait_for_clearance(context, page)
+            await asyncio.wait_for(
+                _wait_for_clearance(context, page),
+                timeout=_CHALLENGE_TIMEOUT_SECONDS,
+            )
 
             cookies = await context.cookies(target_url)
             cf_value: str | None = None
@@ -251,30 +297,37 @@ async def _solve_in_browser() -> ClearanceBundle:
                 )
 
             ua = await page.evaluate("() => navigator.userAgent")
+            logger.info("cloudflare: solve done")
             return ClearanceBundle(
                 cookie=str(cf_value),
                 user_agent=str(ua),
                 fetched_at=time.time(),
             )
         finally:
-            await browser.close()
+            try:
+                await asyncio.wait_for(browser.close(), timeout=5)
+            except Exception:
+                logger.warning("cloudflare: browser close hung; abandoning")
 
 
 async def _wait_for_clearance(context, page) -> None:
-    """Poll cookies/title for ~45 s until the challenge resolves."""
-    deadline = time.monotonic() + _SOLVE_TIMEOUT_SECONDS
+    """Poll cookies/title until the challenge resolves.
+
+    Outer-bounded by the asyncio.wait_for in the caller; this loop just
+    runs until that fires or the cookie shows up.
+    """
     target = page.url
-    while time.monotonic() < deadline:
+    iterations = 0
+    while True:
         for c in await context.cookies(target):
             if c.get("name") == "cf_clearance" and c.get("value"):
+                logger.info("cloudflare: cf_clearance cookie observed")
                 return
-        title = await page.title()
-        if title and "moment" not in title.lower():
-            # Page swapped to real content but cookie hasn't appeared in our
-            # snapshot yet — give it a beat then check cookies one more time.
-            await asyncio.sleep(0.5)
-            for c in await context.cookies(target):
-                if c.get("name") == "cf_clearance" and c.get("value"):
-                    return
-        await asyncio.sleep(0.8)
-    raise CloudflareError("Timed out waiting for Cloudflare challenge to resolve")
+        if iterations == 0 or iterations % 8 == 0:
+            try:
+                title = await page.title()
+            except Exception:
+                title = "?"
+            logger.info("cloudflare: still waiting (title=%r, iter=%d)", title, iterations)
+        iterations += 1
+        await asyncio.sleep(0.6)
